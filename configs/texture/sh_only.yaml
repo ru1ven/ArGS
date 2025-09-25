@@ -1,0 +1,26 @@
+# @package _global_
+
+texture_name: sh_only
+
+model:
+  gaussian:
+    use_sh: true
+    sh_degree: 3
+  texture:
+    name: sh_only
+    cano_view_dir: true
+    view_noise: 45
+    sh_degree: 3
+
+    non_rigid_dim: 256
+#
+#    mlp:
+#      n_neurons: 64
+#      n_hidden_layers: 2
+#      skip_in: [ ]
+#      cond_in: [ ]
+#      multires: 0
+opt:
+  feature_lr: 1e-3
+  texture_lr: 1e-3
+

@@ -1,0 +1,45 @@
+# @package _global_
+
+dataset_name: 'arctic_mixer'
+test_iterations: [15000, 25000, 35000, 50000]
+save_iterations: [15000, 25000, 35000, 50000]
+checkpoint_iterations: [15000, 25000, 50000]
+dataset:
+  name: 'arctic'
+  root_dir: "/mnt/sda2/lxy/dataset/hand/arctic/"
+  refine: False
+  finetune: True
+  backbone: 'CLIP'
+  noise: False
+  anno_name: all
+  train_sample_rate : 1
+  val_sample_rate : 1
+  test_sample_rate : 1
+  predict_sample_rate : 1
+  split_train: 's01_mixer_use_01_1'
+  split_test: 's01_mixer_use_01_8'
+  speedup: True
+  ego_image_scale: 0.3
+  #train_views: [ 's01_box_use_01_1', 's01_box_use_01_5', 's01_box_use_01_8' ]
+  #test_views: [ 's01_box_use_01_4' ]
+
+  _SUBJECTS : [
+      's01',
+  ]
+  _YCB_CLASSES: [
+                'mixer',
+#                'capsulemachine',
+#                'espressomachine',
+#                'ketchup',
+#                'laptop',
+#                'microwave',
+#                'mixer',
+#                'waffleiron',
+  ]
+
+  img_hw:
+    - 1000
+    - 1000
+
+white_background: false
+data_device: cuda

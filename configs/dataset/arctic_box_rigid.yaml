@@ -1,0 +1,44 @@
+# @package _global_
+
+dataset_name: 'arctic_box_rigid'
+test_iterations: [15000, 30000, 40000, 50000]
+save_iterations: [15000, 30000, 40000, 50000]
+checkpoint_iterations: [ 50000]
+
+dataset:
+  name: 'arctic_rigid'
+  root_dir: "/home/cyc/pycharm/lxy/hold/unpack/arctic_data/arctic_s03_box_grab_01_1"
+  refine: False
+  finetune: True
+  backbone: 'CLIP'
+  noise: False
+  anno_name: all
+  train_sample_rate : 1
+  val_sample_rate : 1
+  test_sample_rate : 1
+  predict_sample_rate : 1
+  split: 'NR9_box'
+  speedup: True
+  ego_image_scale: 0.3
+
+  _SUBJECTS : [
+      's03',
+
+  ]
+  _YCB_CLASSES: [
+                'box',
+#                'capsulemachine',
+#                'espressomachine',
+#                'ketchup',
+#                'laptop',
+#                'microwave',
+#                'mixer',
+#                'waffleiron',
+  ]
+
+  img_hw:
+    - 1384
+    - 1277
+
+white_background: false
+data_device: cuda

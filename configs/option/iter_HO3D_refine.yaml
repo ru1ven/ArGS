@@ -1,0 +1,32 @@
+# @package _global_
+
+opt:
+  lambda_pose_hand: 10
+  lambda_pose_obj: 10
+  lambda_mano_joint: 1000
+  lambda_pose_regularization_hand: 1e-5
+  lambda_pose_regularization_obj: 1e-5
+
+  obj_rot_weight: 10
+  obj_trans_weight: 1e4
+  obj_corner_weight: 1e3
+
+  joint_weight: 1
+  cls_weight: 10
+
+  lambda_kp_obj_rot: 10
+  lambda_kp_obj_trans: 1e4
+  lambda_kp_obj_corner: 1e3
+
+  lambda_kp_joint: 1
+  lambda_kp_cls: 10
+
+  lambda_kp_verts3d: 1
+  lambda_kp_joints3d: 1
+  lambda_kp_manopose: 1
+  lambda_kp_manoshape: 1
+
+
+  pose_correction_lr: 1e-4
+
+

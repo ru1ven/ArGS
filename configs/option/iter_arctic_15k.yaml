@@ -1,0 +1,28 @@
+# @package _global_
+
+opt:
+  iterations: 15000
+
+  lr_ratio: 0.05
+  densify_until_iter: 12000
+  densification_interval: 200
+  densify_from_iter: 500
+  opacity_reset_interval: 2000
+
+  lambda_perceptual: 1e-2
+
+
+
+test_interval: -1
+
+model:
+  gaussian:
+    #delay: 10000
+    delay: 0
+    #delay: 200000
+    until: 200000
+
+  deformer:
+    non_rigid:
+      pose_correction:
+        name: supervise

@@ -1,0 +1,48 @@
+# @package _global_
+
+opt:
+  iterations: 360000
+
+  lr_ratio: 0.01
+  densify_until_iter: 300000
+  densification_interval: 10000
+  densify_from_iter: 12000
+  opacity_reset_interval: 60000
+
+  #lambda_perceptual: 0
+  lambda_perceptual: 1e-2
+
+  lambda_nr_xyz: 1e-1
+  lambda_pose_hand: 1e-2
+  lambda_pose_obj: 1e-2
+  lambda_mano_joint: 100
+  lambda_pose_regularization_hand: 1e-1
+  lambda_pose_regularization_obj: 1e-1
+
+  lambda_kp_obj_rot: 10
+  lambda_kp_obj_trans: 1e4
+  lambda_kp_obj_corner: 1e3
+
+  lambda_kp_joint: 1
+  lambda_kp_cls: 10
+
+  lambda_kp_verts3d: 1
+  lambda_kp_joints3d: 1
+  lambda_kp_manopose: 1
+  lambda_kp_manoshape: 1
+
+
+test_interval: -1
+
+model:
+  gaussian:
+    #delay: 0
+    delay: 460000
+
+  deformer:
+    non_rigid:
+      pose_correction:
+        name: supervise
+
+
+

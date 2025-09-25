@@ -1,0 +1,39 @@
+# @package _global_
+
+opt:
+
+
+  lambda_pose_hand: 0
+  lambda_pose_obj: 0
+  lambda_mano_joint: 0
+  lambda_pose_regularization_hand: 1e-1
+  lambda_pose_regularization_obj: 1e-1
+
+  pose_correction_lr: 1e-5
+
+  non_rigid_lr: 1e-5
+  rigid_lr: 1e-4
+  texture_lr: 1e-4
+
+
+  densify_until_iter: 480000
+  densification_interval: 3000
+  densify_from_iter: 364000
+  opacity_reset_interval: 2000000
+
+
+model:
+    gaussian:
+      delay: 366000
+      until: -1
+
+    deformer:
+      non_rigid:
+        delay: 366000
+
+
+    pose_correction:
+      name: supervise
+      delay: 366000
+
+

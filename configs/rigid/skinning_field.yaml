@@ -1,0 +1,43 @@
+# @package _global_
+
+rigid_name: mlp_field
+
+model:
+  deformer:
+    rigid:
+      name: skinning_field
+
+      distill: false
+      res: 64
+      z_ratio: 4
+      d_out: 16
+      soft_blend: 20
+      n_reg_pts: 1024
+      skinning_network:
+        otype: VanillaMLP
+        n_neurons: 128
+        n_hidden_layers: 4
+        skip_in: []
+        cond_in: []
+        multires: 0
+      hashgrid:
+        n_levels: 16
+        n_features_per_level: 2
+        log2_hashmap_size: 16
+        base_resolution: 16
+        per_level_scale: 1.447269237440378 # max reso 4096
+        max_resolution: 2048
+      mlp:
+        n_neurons: 128
+        n_hidden_layers: 3
+        skip_in: [ ]
+        cond_in: [ 0 ]
+        multires: 0
+
+
+
+opt:
+  lambda_skinning: [10,1000,0.1]
+  #lambda_tempo_bone: 5e-2
+  lambda_tempo_bone: 0
+  rigid_lr: 1e-4

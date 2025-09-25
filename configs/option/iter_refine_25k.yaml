@@ -1,0 +1,25 @@
+# @package _global_
+
+opt:
+  iterations: 25000
+
+  lr_ratio: 0.1
+
+  lambda_perceptual: 1e-3
+  lambda_l1: 0.1
+  lambda_mask: 1
+
+
+test_interval: -1
+
+model:
+  gaussian:
+    #delay: 10000
+    delay: 0
+    #delay: 200000
+    until: 200000
+
+  deformer:
+    non_rigid:
+      pose_correction:
+        name: supervise

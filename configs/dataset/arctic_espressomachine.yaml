@@ -1,0 +1,37 @@
+# @package _global_
+
+dataset_name: 'arctic_espressomachine'
+test_iterations: [15000, 25000, 35000, 50000]
+save_iterations: [15000, 25000, 35000, 50000]
+checkpoint_iterations: [15000, 25000, 50000]
+
+dataset:
+  name: 'arctic'
+  root_dir: "/mnt/sda2/lxy/dataset/hand/arctic/"
+  refine: False
+  finetune: True
+  backbone: 'CLIP'
+  noise: False
+  anno_name: all
+  train_sample_rate : 1
+  val_sample_rate : 1
+  test_sample_rate : 1
+  predict_sample_rate : 1
+  split_train: 's01_espressomachine_use_01_3'
+  split_test: 's01_espressomachine_use_01_1'
+  speedup: True
+  ego_image_scale: 0.3
+
+  _SUBJECTS : [
+      's01',
+  ]
+  _YCB_CLASSES: [
+        'espressomachine',
+  ]
+
+  img_hw:
+    - 1000
+    - 1000
+
+white_background: false
+data_device: cuda

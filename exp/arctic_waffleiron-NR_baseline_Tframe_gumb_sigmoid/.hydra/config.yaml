@@ -1,0 +1,221 @@
+accumulation_steps: 1
+test_iterations:
+- 15000
+- 30000
+- 40000
+- 50000
+wandb_disable: false
+save_code: false
+name: ${dataset_name}-${tag}
+tag: NR_baseline_Tframe_gumb_sigmoid
+model:
+  gaussian:
+    use_sh: true
+    sh_degree: 3
+    delay: 0
+    until: 200000
+  deformer:
+    rigid:
+      name: skinning_field
+      distill: false
+      res: 64
+      z_ratio: 4
+      d_out: 16
+      soft_blend: 20
+      n_reg_pts: 1024
+      skinning_network:
+        otype: VanillaMLP
+        n_neurons: 128
+        n_hidden_layers: 4
+        skip_in: []
+        cond_in: []
+        multires: 0
+      hashgrid:
+        n_levels: 16
+        n_features_per_level: 2
+        log2_hashmap_size: 16
+        base_resolution: 16
+        per_level_scale: 1.447269237440378
+        max_resolution: 2048
+      mlp:
+        n_neurons: 128
+        n_hidden_layers: 3
+        skip_in: []
+        cond_in:
+        - 0
+        multires: 0
+    non_rigid:
+      pose_correction:
+        name: supervise
+        delay: 60000
+        mlp:
+          n_neurons: 128
+          n_hidden_layers: 3
+          skip_in: []
+          cond_in:
+          - 0
+          multires: 0
+          last_layer_init: true
+      name: hashgrid
+      scale_offset: logit
+      rot_offset: mult
+      delay: 8000
+      feature_dim: ${model.texture.non_rigid_dim}
+      latent_dim: 64
+      pose_encoder:
+        num_joints: 16
+        rel_joints: false
+        dim_per_joint: 6
+        out_dim: -1
+      hashgrid:
+        n_levels: 16
+        n_features_per_level: 2
+        log2_hashmap_size: 16
+        base_resolution: 16
+        per_level_scale: 1.447269237440378
+        max_resolution: 2048
+      mlp:
+        n_neurons: 128
+        n_hidden_layers: 3
+        skip_in: []
+        cond_in:
+        - 0
+        multires: 0
+        last_layer_init: true
+  texture:
+    name: sh2RGB
+    cano_view_dir: true
+    view_noise: 45
+    sh_degree: 3
+    non_rigid_dim: 256
+    latent_dim: 64
+    mlp:
+      n_neurons: 256
+      n_hidden_layers: 4
+      skip_in: []
+      cond_in: []
+      multires: 0
+dataset:
+  preload: false
+  train_smpl: true
+  mode: ${mode}
+  test_mode: view
+  predict_seq: 0
+  freeview: false
+  resolution: -1
+  padding: 0.1
+  white_background: false
+  data_device: cuda
+  eval: false
+  color_factor: 0
+  name: arctic
+  root_dir: /mnt/sda2/lxy/dataset/hand/arctic/
+  refine: false
+  finetune: true
+  backbone: CLIP
+  noise: false
+  anno_name: all
+  train_sample_rate: 1
+  val_sample_rate: 1
+  test_sample_rate: 1
+  predict_sample_rate: 1
+  split: s01_waffleiron_use_01_1
+  speedup: true
+  ego_image_scale: 0.3
+  _SUBJECTS:
+  - s01
+  _YCB_CLASSES:
+  - waffleiron
+  img_hw:
+  - 1000
+  - 1000
+opt:
+  iterations: 50000
+  grad_clip: 0.1
+  position_lr_init: 0.00016
+  position_lr_final: 1.6e-06
+  position_lr_delay_mult: 0.01
+  position_lr_max_steps: 30000
+  feature_lr: 0.001
+  opacity_lr: 0.05
+  scaling_lr: 0.005
+  rotation_lr: 0.001
+  pose_correction_lr: 1.0e-05
+  rigid_lr: 0.0001
+  objrigid_lr: 0.0001
+  non_rigid_lr: 1.0e-05
+  lr_ratio: 0.01
+  lambda_l1: 1.0
+  lambda_dssim: 0.0
+  lambda_perceptual: 0.01
+  mask_loss_type: l1
+  lambda_mask: 0.1
+  lambda_opacity: 0.0
+  lambda_skinning:
+  - 10
+  - 1000
+  - 0.1
+  lambda_pose: 0.0
+  lambda_aiap_xyz: 1.0
+  lambda_aiap_cov: 100.0
+  percent_dense: 0.01
+  densification_interval: 400
+  opacity_reset_interval: 4000
+  densify_from_iter: 1000
+  densify_until_iter: 35000
+  densify_grad_threshold: 0.0002
+  opacity_threshold: 0.05
+  lambda_pose_hand: 0.01
+  lambda_pose_obj: 0.01
+  lambda_mano_joint: 100
+  lambda_pose_regularization_hand: 0.1
+  lambda_pose_regularization_obj: 0.1
+  texture_lr: 0.001
+  lambda_tempo_bone: 0
+  lambda_nr_xyz_obj: 0.01
+  lambda_nr_scale_obj: 0.001
+  lambda_nr_rot_obj: 0.001
+  lambda_nr_tempo_xyz_obj: 0.05
+  lambda_nr_tempo_scale_obj: 0.01
+  lambda_nr_tempo_rot_obj: 0.01
+  nr_latent_lr: 1.0e-05
+  lambda_nr_xyz: 0.001
+  lambda_nr_scale: 0.0001
+  lambda_nr_rot: 0.0001
+  lambda_kp_obj_rot: 10
+  lambda_kp_obj_trans: 10000.0
+  lambda_kp_obj_corner: 1000.0
+  lambda_kp_joint: 1
+  lambda_kp_cls: 10
+  lambda_kp_verts3d: 1
+  lambda_kp_joints3d: 1
+  lambda_kp_manopose: 1
+  lambda_kp_manoshape: 1
+pipeline:
+  convert_SHs_python: false
+  compute_cov3D_python: true
+  debug: false
+  pose_noise: 0
+debug_from: -1
+detect_anomaly: false
+test_interval: -1
+save_iterations:
+- 15000
+- 30000
+- 40000
+- 50000
+seed: 0
+checkpoint_iterations:
+- 50000
+start_checkpoint: /mnt/sda2/lxy/NonrigidGS_results/waffleiron/arctic_waffleiron-NR_50k1e-4__158/ckpt50000.pth
+mode: test
+load_ckpt: null
+evaluate: true
+clean: true
+dataset_name: arctic_waffleiron
+white_background: false
+data_device: cuda
+pose_name: supervice
+texture_name: sh
+rigid_name: mlp_field
+non_rigid_name: ingp

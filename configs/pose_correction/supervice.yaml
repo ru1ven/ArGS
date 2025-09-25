@@ -1,0 +1,30 @@
+# @package _global_
+
+pose_name: supervice
+
+dataset:
+  train_smpl: true
+
+model:
+  deformer:
+    non_rigid:
+      pose_correction:
+        name: supervice
+        delay: 60000
+    #    delay: -1
+        mlp:
+          n_neurons: 128
+          n_hidden_layers: 3
+          skip_in: []
+          cond_in: [ 0 ]
+          multires: 0
+          last_layer_init: true
+
+
+opt:
+  pose_correction_lr: 1e-5
+  lambda_pose_hand: 1e-2
+  lambda_pose_obj: 1e-2
+  lambda_mano_joint: 10
+  lambda_pose_regularization_hand: 1e-1
+  lambda_pose_regularization_obj: 1e-1

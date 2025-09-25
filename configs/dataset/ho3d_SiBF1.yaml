@@ -1,0 +1,27 @@
+# @package _global_
+
+dataset_name: 'ho3d_SiBF1'
+
+dataset:
+  name: 'ho3d'
+  root_dir: "/home/cyc/pycharm/lxy/3DGS//HO3D/SiBF1"
+  subject : SiBF1
+  refine: False
+
+  train_view: [ '2', '3','4' ]
+  #train_view: [ '0']
+  val_view: [ '0','1' ]
+  test_view: [ '0','1' ]
+  predict_view: [ '0','1' ]
+  train_sample_rate : 1
+  val_sample_rate : 1
+  test_sample_rate : 1
+  predict_sample_rate : 20
+
+
+  img_hw:
+    - 480
+    - 640
+
+white_background: false
+data_device: cuda

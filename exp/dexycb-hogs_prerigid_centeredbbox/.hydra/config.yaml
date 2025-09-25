@@ -1,0 +1,228 @@
+wandb_disable: true
+save_code: false
+refine_epoch: 11
+batch_size: 8
+test_batch_size: 1
+name: ${dataset_name}-${tag}
+tag: hogs_prerigid_centeredbbox
+refine_tag: obj_pose_refine_tanh_1020
+model:
+  gaussian:
+    use_sh: true
+    sh_degree: 3
+    delay: 20000
+  deformer:
+    rigid:
+      name: skinning_field
+      distill: false
+      res: 64
+      z_ratio: 4
+      d_out: 16
+      soft_blend: 20
+      n_reg_pts: 1024
+      skinning_network:
+        otype: VanillaMLP
+        n_neurons: 128
+        n_hidden_layers: 4
+        skip_in: []
+        cond_in: []
+        multires: 0
+    non_rigid:
+      delay: 8000
+      until: 360000
+      pose_correction:
+        name: supervice
+        delay: 60000
+        mlp:
+          n_neurons: 128
+          n_hidden_layers: 3
+          skip_in: []
+          cond_in:
+          - 0
+          multires: 0
+          last_layer_init: true
+      name: hashgrid
+      scale_offset: logit
+      rot_offset: mult
+      feature_dim: ${model.texture.non_rigid_dim}
+      latent_dim: 0
+      pose_encoder:
+        num_joints: 16
+        rel_joints: false
+        dim_per_joint: 6
+        out_dim: -1
+      hashgrid:
+        n_levels: 16
+        n_features_per_level: 2
+        log2_hashmap_size: 16
+        base_resolution: 16
+        per_level_scale: 1.447269237440378
+        max_resolution: 2048
+      mlp:
+        n_neurons: 128
+        n_hidden_layers: 3
+        skip_in: []
+        cond_in:
+        - 0
+        multires: 0
+        last_layer_init: true
+  texture:
+    name: sh2RGB
+    cano_view_dir: true
+    view_noise: 45
+    sh_degree: 3
+    non_rigid_dim: 256
+dataset:
+  preload: false
+  train_smpl: true
+  mode: ${mode}
+  test_mode: view
+  predict_seq: 0
+  freeview: false
+  resolution: -1
+  padding: 0.1
+  white_background: false
+  data_device: cuda
+  eval: false
+  name: dexycb
+  root_dir: /mnt/sda1/lxy/3DGS/DexYCB/
+  mesh_dir: ../results/dexycb-hogs_util30k_delay0_color.3/point_cloud/iteration_360000/mesh0.6_7k/
+  refine: false
+  finetune: true
+  backbone: CLIP
+  color_factor: 0
+  noise: true
+  anno_name: model_SDF
+  train_sample_rate: 1
+  val_sample_rate: 1
+  test_sample_rate: 1
+  predict_sample_rate: 1
+  _SUBJECTS:
+  - 20200709-subject-01
+  - 20200813-subject-02
+  - 20200820-subject-03
+  - 20200903-subject-04
+  - 20200908-subject-05
+  - 20200918-subject-06
+  - 20200928-subject-07
+  - 20201002-subject-08
+  - 20201015-subject-09
+  - 20201022-subject-10
+  _YCB_CLASSES:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+  - 12
+  - 13
+  - 14
+  - 15
+  - 16
+  - 17
+  - 18
+  - 20
+  - 21
+  img_hw:
+  - 480
+  - 640
+opt:
+  iterations: 550000
+  grad_clip: 0
+  lambda_perceptual: 0.01
+  densify_until_iter: 350000
+  densification_interval: 10000
+  densify_from_iter: 12000
+  opacity_reset_interval: 60000
+  position_lr_init: 0.00016
+  position_lr_final: 1.6e-06
+  position_lr_delay_mult: 0.01
+  position_lr_max_steps: 30000
+  feature_lr: 0.001
+  opacity_lr: 0.05
+  scaling_lr: 0.005
+  rotation_lr: 0.001
+  pose_correction_lr: 0.0001
+  rigid_lr: 0.0001
+  objrigid_lr: 0.0001
+  non_rigid_lr: 1.0e-05
+  lr_ratio: 0.01
+  lambda_l1: 0.0
+  lambda_dssim: 0.0
+  mask_loss_type: l1
+  lambda_mask: 0.0
+  lambda_opacity: 0.0
+  lambda_skinning:
+  - 10
+  - 1000
+  - 0.1
+  lambda_pose: 0.0
+  lambda_aiap_xyz: 0.0
+  lambda_aiap_cov: 0.0
+  percent_dense: 0.01
+  densify_grad_threshold: 0.0002
+  opacity_threshold: 0.05
+  lambda_pose_hand: 0.01
+  lambda_pose_obj: 0.01
+  lambda_mano_joint: 1
+  lambda_pose_regularization_hand: 0.1
+  lambda_pose_regularization_obj: 0.1
+  texture_lr: 0.001
+  lambda_nr_xyz_obj: 0.1
+  lambda_nr_scale_obj: 0.001
+  lambda_nr_rot_obj: 0.001
+  nr_latent_lr: 1.0e-05
+  lambda_obj_rot: 10
+  lambda_obj_trans: 10000.0
+  lambda_obj_corner: 1000.0
+  lambda_kp_joint: 1
+  lambda_kp_cls: 10
+  lambda_mano_mesh: 1
+  lambda_pose_param: 1
+  lambda_shape_param: 1
+  lambda_contact: 20
+  lambda_penetration: 10
+pipeline:
+  convert_SHs_python: false
+  compute_cov3D_python: true
+  debug: false
+  pose_noise: 0
+debug_from: -1
+detect_anomaly: false
+test_interval: -1
+save_iterations:
+- 490000
+seed: 0
+checkpoint_iterations: []
+start_checkpoint: null
+sample_pc: 2048
+mode: test
+load_ckpt: null
+evaluate: true
+clean: true
+dataset_name: dexycb
+test_iterations:
+- 0
+- 150000
+- 200000
+- 250000
+- 300000
+- 330000
+- 360000
+- 400000
+- 430000
+- 4600000
+- 490000
+- 520000
+white_background: false
+data_device: cuda
+pose_name: supervice
+texture_name: sh
+rigid_name: mlp_field
+non_rigid_name: ingp

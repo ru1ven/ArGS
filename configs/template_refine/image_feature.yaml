@@ -1,0 +1,40 @@
+# @package _global_
+
+refine_name: image_feature
+
+model:
+  template_refine:
+
+    name: image_feature
+    delay: 0
+    feature_dim: 0
+    latent_dim: 0
+
+    distill: false
+    res: 64
+    z_ratio: 4
+    d_out: 16
+    soft_blend: 20
+    n_reg_pts: 1024
+
+    mlp:
+      n_neurons: 128
+      n_hidden_layers: 3
+      skip_in: [ ]
+      cond_in: [ 0 ]
+      multires: 0
+
+      last_layer_init: false
+
+opt:
+  refine_lr: 1e-6
+  re_latent_lr: 1e-6
+  texture_lr: 1e-3
+  tex_latent_lr: 1e-3
+  latent_weight_decay: 0.05
+
+  lambda_re_xyz: 1e-3
+  #lambda_nr_xyz: 0.
+  lambda_re_scale: 1e-4
+  #lambda_nr_scale: 0.
+  lambda_re_rot: 1e-4

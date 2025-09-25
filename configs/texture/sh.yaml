@@ -1,0 +1,27 @@
+# @package _global_
+
+texture_name: sh
+
+model:
+  gaussian:
+    use_sh: true
+    sh_degree: 3
+  texture:
+    name: sh2RGB
+    cano_view_dir: true
+    view_noise: 45
+    sh_degree: 3
+
+    non_rigid_dim: 256
+    latent_dim: 64
+
+    mlp:
+      n_neurons: 256
+      n_hidden_layers: 4
+      skip_in: [ ]
+      cond_in: [ ]
+      multires: 0
+opt:
+  feature_lr: 1e-3
+  texture_lr: 1e-3
+

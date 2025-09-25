@@ -1,0 +1,64 @@
+# @package _global_
+
+dataset_name: 'ho3d_all'
+
+test_iterations: [50000,70000,90000]
+save_iterations: [90000]
+
+dataset:
+  name: 'ho3d'
+  root_dir: "/mnt/sda1/lxy/HO3D_v2/train/"
+  refine: False
+
+  train_view: [
+               '0-5-SM2','0-5-SM3', '0-5-SM4',
+               '0-14-SMu1',
+               #'0-17-GSF10', '0-17-GSF11', '0-17-GSF12', '0-17-GSF13',  '0-17-GSF14',
+               '0-10-SiBF10','0-10-SiBF11','0-10-SiBF12','0-10-SiBF13','0-10-SiBF14',
+               '0-2-MC1',
+               '0-3-SiS1', '0-3-SS1', '0-3-SS2', '0-3-SS3',
+               #'0-9-GPMF10', '0-9-GPMF11', '0-9-GPMF12', '0-9-GPMF13', '0-9-GPMF14',
+
+               '1-12-SB10', '1-12-SB12',                                                 '1-12-SB10', '1-12-SB12','1-12-SB10', '1-12-SB12',
+
+               '2-12-ABF10','2-12-ABF11','2-12-ABF12','2-12-ABF13','2-12-ABF14',
+               '2-2-MC5',
+               #'2-15-MDF10', '2-15-MDF11','2-15-MDF12', '2-15-MDF13','2-15-MDF14',
+
+               '3-3-ShSu10', '3-3-ShSu12', '3-3-ShSu13',
+
+               '5-10-BB10', '5-10-BB11', '5-10-BB12', '5-10-BB13', '5-10-BB14',
+
+               '6-2-MC2', '6-2-MC4', '6-2-MC6',                                          '6-2-MC2', '6-2-MC4', '6-2-MC6',
+
+               '7-14-SMu40', '7-14-SMu41',                                               '7-14-SMu40', '7-14-SMu41','7-14-SMu40', '7-14-SMu41',
+
+
+               # repeat subject
+               '0-5-SM2','0-5-SM3', '0-5-SM4', '0-5-SM2','0-5-SM3', '0-5-SM4',
+               '1-12-SB10', '1-12-SB12',                                                 '1-12-SB10', '1-12-SB12','1-12-SB10', '1-12-SB12',
+               '2-12-ABF10','2-12-ABF11','2-12-ABF12','2-12-ABF13','2-12-ABF14',
+               '2-2-MC5',
+               '3-3-ShSu10', '3-3-ShSu12', '3-3-ShSu13',
+               '5-10-BB10', '5-10-BB11', '5-10-BB12', '5-10-BB13', '5-10-BB14',
+               '6-2-MC2', '6-2-MC4', '6-2-MC6',                                          '6-2-MC2', '6-2-MC4', '6-2-MC6',
+               '7-14-SMu40', '7-14-SMu41',                                               '7-14-SMu40', '7-14-SMu41','7-14-SMu40', '7-14-SMu41',
+
+  ]
+
+  #train_view: [ '0']
+  val_view: ['1-12-SB14','0-5-SM5','7-14-SMu42']
+  test_view: ['1-12-SB14','0-5-SM5','7-14-SMu42']
+  predict_view: ['1-12-SB14','0-5-SM5','7-14-SMu42']
+  train_sample_rate : 1
+  val_sample_rate : 1
+  test_sample_rate : 1
+  predict_sample_rate : 20
+
+
+  img_hw:
+    - 480
+    - 640
+
+white_background: false
+data_device: cuda

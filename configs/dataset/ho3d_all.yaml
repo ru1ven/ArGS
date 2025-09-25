@@ -1,0 +1,46 @@
+# @package _global_
+
+dataset_name: 'ho3d'
+
+test_iterations: [60000, 90000,120000,150000,180000, 200000]
+save_iterations: [150000, 200000]
+checkpoint_iterations: [150000,180000, 200000]
+
+dataset:
+  name: 'ho3d'
+  root_dir: "/mnt/sda1/lxy/3DGS/HO3D_v3/train/"
+  refine: False
+
+  train_view: [
+        'ABF11', 'ABF13', 'ABF10', 'ABF12', 'ABF14'
+        'BB10', 'BB13', 'BB12', 'BB11', 'BB14'
+        'GSF12', 'GSF10', 'GSF13', 'GSF11', 'GPMF11', 'GPMF12', 'GPMF10', 'GPMF13','GSF14','GPMF14'
+
+        'MC2', 'MC4','MC1', 'MC5', 'MC6'
+        'MDF10', 'MDF13', 'MDF11', 'MDF12', 'MDF14'
+
+        'ND2',
+        'SB10', 'SB12', 'SM2', 'SM3','SM4', 'SS3', 'SS2', 'SS1', 'SMu41', 'SMu40','SMu1', 'SM5', 'SMu42'
+        'ShSu12', 'ShSu13', 'ShSu10', 'ShSu14'
+        'SiBF10', 'SiBF11', 'SiBF12', 'SiBF13','SiS1', 'SiBF14'
+  ]
+
+    #val_view: []
+  _SUBJECTS: ['0', '1', '2', '3', '4', '5', '6', '7', '8']
+  _YCB_CLASSES: [12, 10, 17, 9, 2, 5, 3, 10, 12, 15, 14]
+  test_view: ['ABF14', 'BB14', 'GSF14', 'GPMF14', 'MC6', 'SM5','ShSu14', 'SiBF14', 'SB14', 'MDF14', 'SMu42']
+
+
+  #predict_view: []
+  train_sample_rate : 1
+  #val_sample_rate : 1
+  test_sample_rate : 1
+  #predict_sample_rate : 20
+
+
+  img_hw:
+    - 480
+    - 640
+
+white_background: false
+data_device: cuda

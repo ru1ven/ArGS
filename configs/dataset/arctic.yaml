@@ -1,0 +1,44 @@
+# @package _global_
+
+dataset_name: 'arctic'
+test_iterations: [30000, 60000, 80000, 100000]
+save_iterations: [80000, 100000]
+checkpoint_iterations: [80000, 100000]
+
+dataset:
+  name: 'arctic'
+  root_dir: "/mnt/sda2/lxy/dataset/hand/arctic/"
+  refine: False
+  finetune: True
+  backbone: 'CLIP'
+  noise: False
+  anno_name: all
+  train_sample_rate : 1
+  val_sample_rate : 1
+  test_sample_rate : 1
+  predict_sample_rate : 1
+  split: 'NR9'
+  speedup: True
+  ego_image_scale: 0.3
+
+  _SUBJECTS : [
+      's01',
+
+  ]
+  _YCB_CLASSES: [
+                'box',
+                'capsulemachine',
+                'espressomachine',
+                'ketchup',
+                'laptop',
+                'microwave',
+                'mixer',
+                'waffleiron',
+  ]
+
+  img_hw:
+    - 1000
+    - 1000
+
+white_background: false
+data_device: cuda

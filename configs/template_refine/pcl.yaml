@@ -1,0 +1,25 @@
+# @package _global_
+
+refine_name: pcl
+
+model:
+  deformer:
+    refine:
+      name: obj_v
+
+      distill: false
+      res: 64
+      z_ratio: 4
+      d_out: 16
+      soft_blend: 20
+      n_reg_pts: 1024
+      skinning_network:
+        otype: VanillaMLP
+        n_neurons: 128
+        n_hidden_layers: 4
+        skip_in: []
+        cond_in: []
+        multires: 0
+
+opt:
+  refine_lr: 1e-4
