@@ -290,6 +290,8 @@ def training(config):
         opacity = render_pkg["opacity_render"] if use_mask else None
         obj_opacity = render_pkg["obj_opacity_render"] if use_mask else None
         full_opacity = render_pkg["full_opacity_render"] if use_mask else None
+        opacity_dynamic = render_pkg["opacity_dynamic"] if use_mask else None
+        opacity_static = render_pkg["opacity_static"] if use_mask else None
 
         # Loss
         gt_image = data.original_image.cuda()
@@ -299,6 +301,8 @@ def training(config):
         gt_mask = data.original_mask.cuda()
         obj_mask = data.obj_mask.cuda()
         full_mask = data.full_mask.cuda()
+        mask_dynamic = data.mask_dynamic.cuda()
+        mask_static = data.mask_static.cuda()
 
         # bg_color = torch.tensor(1) if dataset.white_background else torch.tensor(0)
         # image = torch.where(gt_mask == 0, bg_color, image)
@@ -380,6 +384,8 @@ def training(config):
             loss_mask = F.l1_loss(opacity, gt_mask)
             loss_mask += F.l1_loss(obj_opacity, obj_mask)
             loss_mask += F.l1_loss(full_opacity, full_mask)
+            loss_mask += F.l1_loss(opacity_static, mask_static)
+            loss_mask += F.l1_loss(opacity_dynamic, mask_dynamic)
         else:
             raise ValueError
         loss += lambda_mask * loss_mask
@@ -653,7 +659,7 @@ def main(config):
     # print(OmegaConf.to_yaml(config))
     OmegaConf.set_struct(config, False)  # allow adding new values to config
     # print(config.name)
-    config.exp_dir = config.get('exp_dir') or os.path.join('/mnt/sda2/lxy/NonrigidGS_results/', config.dataset._YCB_CLASSES[0],config.name)
+    config.exp_dir = config.get('exp_dir') or os.path.join('/mnt/sda2/lxy/ARGS_results/', config.dataset._YCB_CLASSES[0],config.name)
 
     os.makedirs(config.exp_dir, exist_ok=True)
     config.checkpoint_iterations.append(config.opt.iterations)
@@ -678,11 +684,12 @@ def main(config):
     wandb_name = config.name
     enable_swanlab = not getattr(config, "wandb_disable", False)
 
-    swanlab_log = os.path.join('/mnt/sda2/lxy/NonrigidGS_results/', config.dataset._YCB_CLASSES[0],'swanlab')
+    #swanlab_log = os.path.join('/mnt/sda2/lxy/NonrigidGS_results/', config.dataset._YCB_CLASSES[0],'swanlab')
+    swanlab_log = os.path.join('/mnt/sda2/lxy/ARGS_results/', config.dataset._YCB_CLASSES[0],'swanlab')
     os.makedirs(swanlab_log, exist_ok=True)
     swanlab.init(
         name=wandb_name,
-        project='NonrigidGS_715',
+        project='ARGS_1001',
         config=OmegaConf.to_container(config, resolve=True),
         logdir=swanlab_log,
         mode='local' if enable_swanlab else 'disabled'

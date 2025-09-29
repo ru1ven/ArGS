@@ -612,7 +612,7 @@ def main(config):
     # print(OmegaConf.to_yaml(config))
     OmegaConf.set_struct(config, False)  # allow adding new values to config
     # print(config.name)
-    config.exp_dir = config.get('exp_dir') or os.path.join('/mnt/sda2/lxy/NonrigidGS_results/', config.name)
+    config.exp_dir = config.get('exp_dir') or os.path.join('/mnt/sda2/lxy/ARGS_results/', config.name)
 
     os.makedirs(config.exp_dir, exist_ok=True)
     config.checkpoint_iterations.append(config.opt.iterations)
@@ -631,11 +631,11 @@ def main(config):
     wandb_name = config.name
     enable_swanlab = not getattr(config, "wandb_disable", False)
 
-    swanlab_log = os.path.join('/mnt/sda2/lxy/NonrigidGS_results/', 'nips', 'swanlab')
+    swanlab_log = os.path.join('/mnt/sda2/lxy/ARGS_results/', 'nips', 'swanlab')
     os.makedirs(swanlab_log, exist_ok=True)
     swanlab.init(
         name=wandb_name,
-        project='NonrigidGS_715',
+        project='ARGS_1001',
         config=OmegaConf.to_container(config, resolve=True),
         logdir=swanlab_log,
         mode='local' if enable_swanlab else 'disabled'

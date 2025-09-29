@@ -97,6 +97,8 @@ class Camera:
         self.data['original_mask'] = self.mask.float().to(self.data_device)
         self.data['obj_image'] = self.obj_image.clamp(0.0, 1.0).to(self.data_device)
         self.data['obj_mask'] = self.obj_mask.float().to(self.data_device)
+        self.data['mask_static'] = self.mask_static.float().to(self.data_device)
+        self.data['mask_dynamic'] = self.mask_dynamic.float().to(self.data_device)
         self.data['full_image'] = self.full_image.clamp(0.0, 1.0).to(self.data_device)
         # self.data['full_image_ori'] = self.full_image_ori.clamp(0.0, 1.0).to(self.data_device)
         self.data['full_mask'] = self.full_mask.float().to(self.data_device)

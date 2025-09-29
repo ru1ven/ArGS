@@ -117,7 +117,7 @@ class ArcticDataset(Dataset):
             sid, seq_name, view_idx, image_idx = imgname.split("/")[-4:]
             # 减去偏移得到真实帧索引
             vidx = int(image_idx.split(".")[0]) - self.ioi_offset[sid]
-            if vidx % 2 == 0:
+            if vidx % 2 == 1:
                 frames.append(vidx)
                 self.imgnames.append(imgname)
 
@@ -444,17 +444,15 @@ class ArcticDataset(Dataset):
         )
         imgname = imgname.replace('./arctic_data/data/images/', 'cropped_images/')
         img_name = os.path.join(self.root_dir, imgname)
-        seg_path = img_name.replace('arctic/cropped_images', 'arctic_seqs/seg/').replace('jpg', 'png')
-        #print(seg_path)
-        # imgname = imgname.replace("/arctic_data/", "/data/arctic_data/")
+        seg_path = img_name.replace('arctic/cropped_images/', 'arctic_seqs/seg/').replace('jpg', 'png')
+        part_seg_path = seg_path.replace("seg","masks").replace("png","npy")
+
         image, img_status = read_img(img_name, (1000, 1000, 3))
         mask = cv2.cvtColor(cv2.imread(seg_path), cv2.COLOR_BGR2RGB)
+        
 
         if self.split == 'train':
             R = np.eye(3).astype(np.float32)
-            # R[0, 0] = -1
-            # R[1, 1] = -1
-            # R[2, 2] = 1
             T = np.zeros(3).astype(np.float32)
 
         else:
@@ -467,40 +465,7 @@ class ArcticDataset(Dataset):
             # 提取 R 和 t
             R = cam1_from_cam2[:3, :3]
             T = cam2_from_cam1[:3, 3]
-            #
-            #
-            # obj_rot = data_params["obj_rot"][vidx].copy()
-            # obj_trans = data_params["obj_trans"][vidx].copy()
-            # cam1_from_cam2 = world2cam1 @ np.linalg.inv(world2cam)
-            #
-            # world2cam = np.array(self.world2cam[sid][view_idx - 1])
-            # obj_rot, obj_trans = apply_w2c_pose_numpy(obj_rot, obj_trans / 1000, world2cam)
-            # #print('test', obj_trans)
-            # obj_rot, obj_trans = apply_w2c_pose_numpy(obj_rot, obj_trans, cam1_from_cam2)
-            # #print('test_align',obj_trans)
-            #
-            # R = cam2world[:3, :3]
-            # # T = world2cam[:3, 3]
 
-
-        # cx cy
-        # print('intrx',intrx)
-        # def compensate_principal_point(R, fx, fy, cx, cy, W, H):
-        #     """
-        #     将主点偏移吸收进相机外参 T_cam (4x4)
-        #     - c2w: True 表示输入是 camera-to-world 矩阵
-        #     """
-        #
-        #     dx = (cx - W / 2) / fx
-        #     dy = (cy - H / 2) / fy
-        #     shift_cam = np.array([dx, dy, 0.0]).astype(np.float32)
-        #     t_new = R @ shift_cam
-        #
-        #     return t_new
-
-        # fx, fy, cx, cy =intrx[0, 0], intrx[1, 1], intrx[0, 2], intrx[1, 2]
-        # T = compensate_principal_point(R, fx, fy, cx, cy, self.w, self.h)
-        # print(T)
 
         color_jitting = False
         color_factor = 0.3
@@ -567,6 +532,16 @@ class ArcticDataset(Dataset):
         full_mask = torch.from_numpy(full_mask.astype(np.float32)).unsqueeze(0).float()
         hand_mask = torch.from_numpy(hand_mask.astype(np.float32)).unsqueeze(0).float()
         obj_mask = torch.from_numpy(obj_mask.astype(np.float32)).unsqueeze(0).float()
+
+        if self.split == 'train':
+            part_mask = np.load(part_seg_path)
+            mask_static = (part_mask == 1)
+            mask_dynamic = (part_mask == 2)
+            mask_static = torch.from_numpy(mask_static.astype(np.float32)).float()
+            mask_dynamic = torch.from_numpy(mask_dynamic.astype(np.float32)).float()
+        else:
+            mask_static = torch.zeros_like(obj_mask).squeeze(0)
+            mask_dynamic = torch.zeros_like(obj_mask).squeeze(0)
 
 
         focal_length_x = intrx[0, 0]
@@ -648,6 +623,8 @@ class ArcticDataset(Dataset):
             mask=hand_mask,
             obj_image=obj_image,
             obj_mask=obj_mask,
+            mask_static=mask_static,
+            mask_dynamic=mask_dynamic,
             full_image=full_image,
             full_image_ori=full_image_ori,
             full_mask=full_mask,

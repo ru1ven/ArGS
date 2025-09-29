@@ -233,6 +233,23 @@ def render(data,
             cov3D_precomp=cov3D_precomp)
         opacity_ho = opacity_ho[:1]
 
+        opacity_part = pc_obj.get_dynamic
+        color_part = torch.cat([opacity_part, 1 - opacity_part, torch.zeros_like(opacity_part)], dim=-1)  # (n, 3)
+        colors_opacity_part = torch.cat([torch.zeros(opacity_r.shape[0], 3, device=opacity_r.device),
+                                        torch.zeros(opacity_l.shape[0], 3, device=opacity_l.device),
+                                        color_part], dim=0)
+        opacity_part, _ = rasterizer(
+            means3D=full_means3D,
+            means2D=means2D,
+            shs=None,
+            colors_precomp=colors_opacity_part,
+            opacities=full_opacity,
+            scales=scales,
+            rotations=rotations,
+            cov3D_precomp=cov3D_precomp)
+        opacity_static = opacity_part[1]
+        opacity_dynamic = opacity_part[0]
+
         if novel_data is not None:
 
             raster_settings_novel = GaussianRasterizationSettings(
@@ -296,6 +313,8 @@ def render(data,
             "opacity_render": opacity_hand,
             "obj_opacity_render": opacity_obj,
             "full_opacity_render": opacity_ho,
+            "opacity_static": opacity_static,
+            "opacity_dynamic": opacity_dynamic,
 
             "updated_camera": updated_camera
             }

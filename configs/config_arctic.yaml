@@ -1,14 +1,14 @@
 defaults:
   - _self_
   #- dataset: arctic_waffleiron
-  #- dataset: arctic_microwave  x
+  #- dataset: arctic_microwave 
   #- dataset: arctic_box
-  - dataset: arctic_ketchup
-  #- dataset: arctic_phone   x
+  #- dataset: arctic_ketchup
+  #- dataset: arctic_phone   
   #- dataset: arctic_notebook
   #- dataset: arctic_laptop
-  #- dataset: arctic_espressomachine  x
-  #- dataset: arctic_capsulemachine  x
+  #- dataset: arctic_espressomachine
+  #- dataset: arctic_capsulemachine
   #- dataset: arctic_mixer
   #- dataset: arctic_scissors
 
@@ -37,7 +37,7 @@ hydra:
 
 name: ${dataset_name}-${tag}
 
-tag: NR10k_dy.9_nr1k2-10K__lnr.5.1_rigid1e-3_100
+tag: samNR10k_dy.9_nr1k2-10K__lnr.5.1_rigid1e-3_100
 #tag: NR+R
 
 rigid_iter: 10000
@@ -134,7 +134,7 @@ test_interval: -1
 save_iterations: [15000,30000,50000]
 seed: 0
 checkpoint_iterations: []
-start_checkpoint: /mnt/sda2/lxy/NonrigidGS_results/waffleiron/arctic_waffleiron-NR_15kfix+25knr/ckpt25000.pth
+# start_checkpoint: /mnt/sda2/lxy/NonrigidGS_results/waffleiron/arctic_waffleiron-NR_15kfix+25knr/ckpt25000.pth
 
 
 

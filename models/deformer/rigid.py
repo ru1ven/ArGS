@@ -391,7 +391,7 @@ class ObjBoneDeform(RigidDeform):
                     xyz=x_bar,  # [N, 3]
                     pts_W=pts_W,  # [N, B]
                     joint_pos=tfs_rela.view(-1, 4, 4)[:, :3, 3],  # [B, 3]
-                    out_dir="/mnt/sda2/lxy/NonrigidGS_results/bones_debug_refine/iter_{}".format(iteration)
+                    out_dir="/mnt/sda2/lxy/ARGS_results/bones_debug_refine/iter_{}".format(iteration)
                 )
 
             return self.obj_rigid_deform(deformed_gaussians, iteration, camera, pose_model), None
@@ -450,7 +450,7 @@ class ObjBoneDeform(RigidDeform):
                 xyz=x_bar,  # [N, 3]
                 pts_W=pts_W,  # [N, B]
                 joint_pos=tfs_rela.view(-1, 4, 4)[:, :3, 3],  # [B, 3]
-                out_dir="/mnt/sda2/lxy/NonrigidGS_results/bones_debug/iter_{}".format(iteration)
+                out_dir="/mnt/sda2/lxy/ARGS_results/bones_debug/iter_{}".format(iteration)
             )
         return self.obj_rigid_deform(deformed_gaussians, iteration, camera, pose_model), None
         #return deformed_gaussians

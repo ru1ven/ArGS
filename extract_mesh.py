@@ -327,14 +327,14 @@ def main(config):
     # print(OmegaConf.to_yaml(config))
     OmegaConf.set_struct(config, False)  # allow adding new values to config
     # print(config.name)
-    config.exp_dir = config.get('exp_dir',os.path.join('/mnt/sda2/lxy/NonrigidGS_results/', config.dataset._YCB_CLASSES[0], config.name))
+    config.exp_dir = config.get('exp_dir',os.path.join('/mnt/sda2/lxy/ARGS_results/', config.dataset._YCB_CLASSES[0], config.name))
     os.makedirs(config.exp_dir, exist_ok=True)
     config.dataset.train_sample_rate=1
     config.dataset.test_sample_rate = 1
     # Set up command line argument parser
     parser = ArgumentParser(description="Testing script parameters")
 
-    parser.add_argument("--ckpt_path", default='/mnt/sda2/lxy/NonrigidGS_results/arctic_box-NR_box_50k1e-4__Non_Rigid__pool+mlp2tfs__hash2weight/')
+    parser.add_argument("--ckpt_path", default='/mnt/sda2/lxy/ARGS_results/arctic_box-NR_box_50k1e-4__Non_Rigid__pool+mlp2tfs__hash2weight/')
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--filter_mesh", action="store_true")
     parser.add_argument("--texture_mesh", action="store_true")
