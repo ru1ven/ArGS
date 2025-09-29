@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  #- dataset: arctic_waffleiron
+  - dataset: arctic_waffleiron
   #- dataset: arctic_microwave 
   #- dataset: arctic_box
   #- dataset: arctic_ketchup
@@ -21,10 +21,9 @@ defaults:
   - option:
     - iter_arctic_50k
 
-
-
-accumulation_steps: 1
-test_iterations: [15000,20000,25000,30000,35000,40000]
+test_iterations: [15000, 25000, 30000, 50000]
+save_iterations: [15000, 25000, 30000, 50000]
+checkpoint_iterations: [15000, 25000, 30000]
 
 wandb_disable: False
 
@@ -37,7 +36,7 @@ hydra:
 
 name: ${dataset_name}-${tag}
 
-tag: samNR10k_dy.9_nr1k2-10K__lnr.5.1_rigid1e-3_100
+tag: samNR10k_dy.9_nr1k2-10K__lnr.5.1_rigid1e-3_clip1e-5
 #tag: NR+R
 
 rigid_iter: 10000
@@ -133,7 +132,7 @@ detect_anomaly: false
 test_interval: -1
 save_iterations: [15000,30000,50000]
 seed: 0
-checkpoint_iterations: []
+
 # start_checkpoint: /mnt/sda2/lxy/NonrigidGS_results/waffleiron/arctic_waffleiron-NR_15kfix+25knr/ckpt25000.pth
 
 

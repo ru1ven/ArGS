@@ -61,11 +61,7 @@ class Non_Rigid(NonRigidDeform):
         super().__init__(cfg)
 
         d_cond = 256
-        self.d_cond = d_cond
-
-        #self.clip_fc = nn.Linear(768 * 2, d_cond)
-
-        # add latent code
+    
         self.latent_dim = 0
         self.frame_dict = metadata['frame_dict']
         if self.latent_dim > 0:
@@ -80,10 +76,7 @@ class Non_Rigid(NonRigidDeform):
         self.metadata_obj = metadata_obj
 
         self.hashgrid = HashGrid(cfg.hashgrid)
-
-        self.non_rigid_delay = cfg.get('delay', 0)
-        pose_correction_cfg = cfg.get('pose_correction', None)
-        self.pose_correction_delay = pose_correction_cfg.get('delay', 0)
+        self.clip_fc = nn.Linear(768 * 2, d_cond)
 
         # for a pre rigid trans
         if ho_type != 'obj':
@@ -93,13 +86,9 @@ class Non_Rigid(NonRigidDeform):
         self.roi_size = cfg.get('roi_size', 224)
 
         self.delta_mlp = VanillaCondMLP(103, d_cond, d_out, cfg.mlp)
-        self.movable_mlp = VanillaCondMLP(48,0,1,cfg.skinning_network)
 
-        #self.L2Loss = torch.nn.MSELoss().cuda()
         self.L2Loss = nn.SmoothL1Loss(reduction="mean").cuda()
         self.delta_history = {}
-        #self.samplesLoss = SamplesLoss("sinkhorn", p=2, blur=0.01)
-        self.delta_max_ma = 0.1
 
     def query_weights(self, xyz):
         # find the nearest vertex
@@ -130,7 +119,7 @@ class Non_Rigid(NonRigidDeform):
 
 
 
-    def forward(self, gaussians, img_feature, iteration, camera, pose_model, compute_loss=True, delay=False, prev_data=None):
+    def forward(self, gaussians, img_feature, iteration, camera, compute_loss=True, delay=False, prev_data=None):
         loss_reg = {}
 
         refined_gaussians = gaussians.clone()
@@ -159,13 +148,10 @@ class Non_Rigid(NonRigidDeform):
         f_opacity = gaussians.get_opacity
         f_cov = gaussians.get_covariance()
 
-        # pc_feature_nr = self.hashgrid_nr(xyz_norm)
-        pc_feature_nr = pose_model.hashgrid_nr(xyz_norm)
-        # pc_feature_nr = pose_model.hashgrid_nr(xyz_norm) # for weight
+       
         pc_feature_hashgrid = self.hashgrid(xyz_norm).float()
-
-        pc_feature_nr = torch.cat([pc_feature_nr, f_cov, f_sh, f_opacity], dim=-1)
-        #pc_feature_fused = torch.cat([pc_feature_hashgrid, f_cov, f_sh, f_opacity], dim=-1)
+        pc_feature = torch.cat([pc_feature_hashgrid, f_cov, f_sh, f_opacity], dim=-1)
+        
         # get pixel_aligned points
         xyz_points = gaussians.get_xyz.clone()
         xyz_canonical = xyz_points.clone()
@@ -212,9 +198,7 @@ class Non_Rigid(NonRigidDeform):
 
 
         pose_feat_global_N = pose_feat_global.expand(xyz_point_trans.shape[0], -1)
-        pose_feat = pose_model.clip_fc(torch.cat([pose_feat_global_N, pose_feat_pixel], dim=-1))
-
-        pose_feat_nr = pose_model.clip_fc_nr(torch.cat([pose_feat_global_N, pose_feat_pixel], dim=-1))
+        pose_feat = self.clip_fc(torch.cat([pose_feat_global_N, pose_feat_pixel], dim=-1))
 
         frame_idx = camera.frame_id
         latent_idx = self.frame_dict[frame_idx]
@@ -222,9 +206,9 @@ class Non_Rigid(NonRigidDeform):
             latent_idx = torch.Tensor([latent_idx]).long().to(pose_feat.device)
             latent_code = self.latent(latent_idx)
             latent_code = latent_code.expand(pose_feat.shape[0], -1)
-            pose_feat_nr = torch.cat([pose_feat_nr, latent_code], dim=1)
+            pose_feat = torch.cat([pose_feat, latent_code], dim=1)
 
-        deltas = self.delta_mlp(pc_feature_nr, cond=pose_feat_nr)
+        deltas = self.delta_mlp(pc_feature, cond=pose_feat)
 
         if self.ho_type == 'obj':
             movable_prob = refined_gaussians.get_dynamic
@@ -268,22 +252,6 @@ class Non_Rigid(NonRigidDeform):
             # if iteration > 1200:
                 loss_nr_reg_loss = 0.5 * torch.mean(movable_prob * (1 - movable_prob)) + 0.1 * torch.mean(movable_prob)
 
-            # # 1. 每点幅度
-            # delta_norm = delta_xyz.norm(dim=-1, keepdim=True)  # [N,1]
-            #
-            # # 2. 滑动平均 delta_max
-            # batch_max = delta_norm.max().detach()
-            # self.delta_max_ma = 0.9 * self.delta_max_ma + (1 - 0.9) * batch_max
-            # delta_max = self.delta_max_ma + 1e-6
-            #
-            # # 3. dy 目标
-            # dy_target = torch.clamp(delta_norm / delta_max, 0., 1.) ** 2
-            # dy_target = dy_target.detach()  # detach final_delta 防止梯度回传
-            #
-            # # 4. 一致性 loss
-            # loss_nr_reg_loss += 0.1*F.mse_loss(movable_prob, dy_target)
-
-
             # # === 时序一致性正则 ===
             frame_idx = camera.frame_id
             self.delta_history[frame_idx] = delta_xyz.detach().cpu()
@@ -302,21 +270,6 @@ class Non_Rigid(NonRigidDeform):
 
 
         return updated_camera, movable_prob, refined_gaussians, canonical_gs, loss_reg
-
-
-    def feat_interaction(self, gaussians,pc_feature_hashgrid, xyz_posed, pixel_feat, color_precompute, roi_color_pixel,pose_model):
-        f_opacity = gaussians.get_opacity
-        f_cov = gaussians.get_covariance()
-        f_color = pose_model.color_emb(color_precompute)
-        f_roi_color_pixel = pose_model.color_emb(roi_color_pixel)
-        # - 48
-        pc_feature = torch.cat([pc_feature_hashgrid, f_cov, f_color, f_opacity], dim=-1)
-        #pc_feature = torch.cat([f_cov, f_color, f_opacity], dim=-1)
-        pc_feature_fused = torch.cat([xyz_posed, pc_feature], dim=-1).unsqueeze(0)
-        gaussian_feat, fps = pose_model.pointnet(pc_feature_fused.permute(0, 2, 1).contiguous())
-
-        pixel_feat = index_points(torch.cat([pixel_feat, f_roi_color_pixel], dim=-1).unsqueeze(0), fps)
-        return index_points(xyz_posed.unsqueeze(0), fps), pixel_feat, gaussian_feat.permute(0, 2, 1).contiguous()
 
 
 def get_non_rigid_deform(cfg, metadata, metadata_obj, type='hand'):

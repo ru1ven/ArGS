@@ -1,9 +1,7 @@
 # @package _global_
 
 dataset_name: 'arctic_box_rigid'
-test_iterations: [15000, 30000, 40000, 50000]
-save_iterations: [15000, 30000, 40000, 50000]
-checkpoint_iterations: [ 50000]
+
 
 dataset:
   name: 'arctic_rigid'

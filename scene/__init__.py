@@ -161,9 +161,8 @@ class Scene:
         return refined_gaussians_hand, refined_gaussians_obj, color_precompute, objcolor_precompute
 
     def get_skinning_loss(self, subject_id):
-        loss_reg_r = getattr(self.converter,f"deformer_hand_{subject_id}_r").rigid.regularization(self.converter.pose_model_hand_r)
-        loss_reg_l = getattr(self.converter, f"deformer_hand_{subject_id}_l").rigid.regularization(
-            self.converter.pose_model_hand_l)
+        loss_reg_r = getattr(self.converter,f"deformer_hand_{subject_id}_r").rigid.regularization()
+        loss_reg_l = getattr(self.converter, f"deformer_hand_{subject_id}_l").rigid.regularization()
         loss_skinning = loss_reg_r.get('loss_skinning', torch.tensor(0.).cuda())+loss_reg_l.get('loss_skinning', torch.tensor(0.).cuda())
         return loss_skinning
 

@@ -206,7 +206,7 @@ class SkinningField(RigidDeform):
             raise ValueError
         return w
 
-    def get_skinning_loss(self, pose_model):
+    def get_skinning_loss(self):
         pts_skinning, sampled_weights = self.sample_skinning_loss()
         pts_skinning = self.aabb.normalize(pts_skinning, sym=True)
 
@@ -250,8 +250,8 @@ class SkinningField(RigidDeform):
 
         return deformed_gaussians
 
-    def regularization(self, pose_model):
-        loss_skinning = self.get_skinning_loss(pose_model)
+    def regularization(self):
+        loss_skinning = self.get_skinning_loss()
         return {
             'loss_skinning': loss_skinning
         }

@@ -1,7 +1,0 @@
-# @package _global_
-
-dataset:
-  test_mode: all
-
-wandb_disable: true
-evaluate: false

@@ -14,60 +14,12 @@ from utils.general_utils import cfg_from_yaml_file
 from utils.network_utils import Pointnet2_Ssg
 from utils.pointbert.point_encoder import PointTransformer_Colored
 from utils.pointnet_utils import index_points
-from .KeypointTR import KeypointTR
 from .deformer import get_deformer
 from .deformer.deformer import get_deformer_obj
 from .network_utils import VanillaCondMLP, HashGrid, homoify, points3DToImg, get_skinning_mlp
 from .pose_correction import get_pose_correction
 from .texture import get_texture
 from models.resnet import ResNet, BasicBlock
-
-
-class Pose_model(nn.Module):
-    def __init__(self, cfg, ho_type):
-        super().__init__()
-        self.cfg = cfg
-        self.pointnet = Pointnet2_Ssg(3 + 103)
-        # config_addr = './utils/pointbert/ULIP_2_PointBERT_10k_colored_pointclouds.yaml'
-        # config = cfg_from_yaml_file(config_addr)
-        #self.pointnet = PointTransformer_Colored(config.model, 3 + 103)
-
-        d_cond = 256
-
-        self.clip_fc = nn.Linear(768 * 2, d_cond)
-        self.clip_fc_nr = nn.Linear(768 * 2, d_cond)
-
-        obj_d_cond = 128
-        self.fuse_pc_mlp = nn.Sequential(
-            nn.Conv1d(512, 128, 1),
-            nn.BatchNorm1d(128),
-            nn.ReLU(inplace=True),
-            nn.Conv1d(128, 1, 1))
-
-
-        feature_d_cond = 128
-        d_out = 3 + 3 + 4
-
-        self.feature_dim = cfg.model.deformer.non_rigid.get('feature_dim', 0)
-        d_out += self.feature_dim
-
-        self.hashgrid = HashGrid(cfg.model.deformer.non_rigid.hashgrid)
-        self.hashgrid_nr = HashGrid(cfg.model.deformer.non_rigid.hashgrid) # for w
-        if ho_type in ['left', 'right']:
-            self.pose_mlp = VanillaCondMLP(768, 45 + 3 + 10 + 3, 45 + 3 + 10 + 3,
-                                            cfg.model.deformer.non_rigid.pose_correction.mlp)
-            #self.lbs_network = get_skinning_mlp(3, cfg.model.deformer.rigid.d_out, cfg.model.deformer.rigid.skinning_network)
-        else:
-            self.obj_emb = nn.Linear(6, obj_d_cond)
-            self.pose_mlp = VanillaCondMLP(768, obj_d_cond, 6,
-                                               cfg.model.deformer.non_rigid.pose_correction.mlp)
-
-        self.color_emb = get_skinning_mlp(3, 48, cfg.model.deformer.rigid.skinning_network)
-
-
-
-    def forward(self, gaussians, camera):
-        raise NotImplementedError
 
 
 class GaussianConverter(nn.Module):
@@ -101,16 +53,9 @@ class GaussianConverter(nn.Module):
         self.texture_l = get_texture(cfg.model.texture, metadata['left'], metadata_obj, 'hand')
         self.objtexture = get_texture(cfg.model.texture, metadata['right'], metadata_obj,'obj')
 
-        self.pose_model_hand_l = Pose_model(cfg,'left')
-        self.pose_model_hand_r = Pose_model(cfg, 'right')
-        self.pose_model_obj = Pose_model(cfg,'obj')
-        self.kpTR = KeypointTR(cfg)
-
         self.lr_scale = 1 * self.cfg.get('batch_size', 8) / 8
         self.hand_lr_scale = 1
-        if self.cfg.dataset.name =='dexycb':
-            self.lr_scale = 0.5 * self.cfg.get('batch_size', 8) / 8
-            self.hand_lr_scale = 0.5
+        
 
         self.optimizer, self.scheduler = None, None
         self.set_optimizer()
@@ -139,15 +84,15 @@ class GaussianConverter(nn.Module):
 
         # Backbone
         opt_params.append({'name': 'backbone', 'params': [p for n, p in self.backbone.named_parameters()],
-                           'lr': self.cfg.opt.get('pose_correction_lr', 0.) * 0.01})
+                           'lr': self.cfg.opt.get('pose_correction_lr', 0.) * 1})
 
-        # Pose models
-        opt_params.append({'name': 'hand_r_pose', 'params': [p for n, p in self.pose_model_hand_r.named_parameters()],
-                           'lr': self.cfg.opt.get('pose_correction_lr', 0.) * self.hand_lr_scale})
-        opt_params.append({'name': 'hand_l_pose', 'params': [p for n, p in self.pose_model_hand_l.named_parameters()],
-                           'lr': self.cfg.opt.get('pose_correction_lr', 0.) * self.hand_lr_scale})
-        opt_params.append({'name': 'obj_pose', 'params': [p for n, p in self.pose_model_obj.named_parameters()],
-                           'lr': self.cfg.opt.get('pose_correction_lr', 0.)})
+        # # Pose models
+        # opt_params.append({'name': 'hand_r_pose', 'params': [p for n, p in self.pose_model_hand_r.named_parameters()],
+        #                    'lr': self.cfg.opt.get('pose_correction_lr', 0.) * self.hand_lr_scale})
+        # opt_params.append({'name': 'hand_l_pose', 'params': [p for n, p in self.pose_model_hand_l.named_parameters()],
+        #                    'lr': self.cfg.opt.get('pose_correction_lr', 0.) * self.hand_lr_scale})
+        # opt_params.append({'name': 'obj_pose', 'params': [p for n, p in self.pose_model_obj.named_parameters()],
+        #                    'lr': self.cfg.opt.get('pose_correction_lr', 0.)})
 
         # Deformer objects
         for obj_id in self.obj_labels:
@@ -274,11 +219,11 @@ class GaussianConverter(nn.Module):
         deformer_hand_r = getattr(self, f"deformer_hand_{camera.subject_id}_r")
         deformer_hand_l = getattr(self, f"deformer_hand_{camera.subject_id}_l")
         camera, movable_prob, refined_gaussians_hand_r, _, loss_non_rigid_hand_r = \
-            deformer_hand_r.non_rigid(gaussians_r, img_feat, iteration, camera, self.pose_model_hand_r,
+            deformer_hand_r.non_rigid(gaussians_r, img_feat, iteration, camera,
                                       compute_loss, delay=False)
         loss_reg.update(loss_non_rigid_hand_r)
         camera, movable_prob, refined_gaussians_hand_l, _, loss_non_rigid_hand_l= \
-            deformer_hand_l.non_rigid(gaussians_l, img_feat, iteration, camera, self.pose_model_hand_l, compute_loss,
+            deformer_hand_l.non_rigid(gaussians_l, img_feat, iteration, camera, compute_loss,
                                       delay=False)
         loss_reg.update(loss_non_rigid_hand_l)
 
@@ -287,17 +232,17 @@ class GaussianConverter(nn.Module):
         nr_delay = not rigid_delay
         #######nr_delay = not rigid_delay
         camera, movable_prob, refined_gaussians_obj, xyz_canonical, loss_non_rigid_obj = \
-                deformer_obj.non_rigid(gaussians_obj, img_feat, iteration, camera, self.pose_model_obj, compute_loss, nr_delay,
+                deformer_obj.non_rigid(gaussians_obj, img_feat, iteration, camera, compute_loss, nr_delay,
                                                          (prev_camera, prev_img_feat))
 
         loss_reg.update(loss_non_rigid_obj)
 
         #if delay:
-        deformed_gaussians_hand_r = deformer_hand_r.rigid(refined_gaussians_hand_r, iteration, camera,self.pose_model_hand_r)
+        deformed_gaussians_hand_r = deformer_hand_r.rigid(refined_gaussians_hand_r, iteration, camera, None)
         deformed_gaussians_hand_l = deformer_hand_l.rigid(refined_gaussians_hand_l, iteration, camera,
-                                                        self.pose_model_hand_l)
+                                                        None)
         deformed_gaussians_obj, loss_reg_rigid = deformer_obj.rigid(refined_gaussians_obj, xyz_canonical, iteration, camera,
-                                                self.pose_model_obj, self.cfg.rigid_iter, rigid_delay, self.save_dir)
+                                                None, self.cfg.rigid_iter, rigid_delay, self.save_dir)
         if loss_reg_rigid is not None:
             loss_reg.update(loss_reg_rigid)
 

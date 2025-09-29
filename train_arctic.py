@@ -103,9 +103,9 @@ def training(config):
     testing_interval = config.test_interval
     saving_iterations = config.save_iterations
     checkpoint_iterations = config.checkpoint_iterations
-    checkpoint = config.start_checkpoint
+    #checkpoint = config.start_checkpoint
     debug_from = config.debug_from
-
+0
     # generate obj_id and subject_id
     gaussians_hand_group = {}
     gaussians_obj_group = {}
