@@ -105,7 +105,6 @@ def training(config):
     checkpoint_iterations = config.checkpoint_iterations
     #checkpoint = config.start_checkpoint
     debug_from = config.debug_from
-0
     # generate obj_id and subject_id
     gaussians_hand_group = {}
     gaussians_obj_group = {}
@@ -166,6 +165,8 @@ def training(config):
     first_iter += 1
     # tracemalloc.start()
     for iteration in range(first_iter, opt.iterations + 1):
+        if iteration == 30002:
+            break
 
         if iteration == config.rigid_iter+1:
             with torch.no_grad():
@@ -384,8 +385,9 @@ def training(config):
             loss_mask = F.l1_loss(opacity, gt_mask)
             loss_mask += F.l1_loss(obj_opacity, obj_mask)
             loss_mask += F.l1_loss(full_opacity, full_mask)
-            loss_mask += F.l1_loss(opacity_static, mask_static)
-            loss_mask += F.l1_loss(opacity_dynamic, mask_dynamic)
+            if iteration>=1200 and iteration<=10000:
+                loss_mask += .1*F.l1_loss(opacity_static, mask_static)
+                loss_mask += .1*F.l1_loss(opacity_dynamic, mask_dynamic)
         else:
             raise ValueError
         loss += lambda_mask * loss_mask
@@ -684,9 +686,9 @@ def main(config):
     wandb_name = config.name
     enable_swanlab = not getattr(config, "wandb_disable", False)
 
-    #swanlab_log = os.path.join('/mnt/sda2/lxy/NonrigidGS_results/', config.dataset._YCB_CLASSES[0],'swanlab')
-    swanlab_log = os.path.join('/mnt/sda2/lxy/ARGS_results/', config.dataset._YCB_CLASSES[0],'swanlab')
-    os.makedirs(swanlab_log, exist_ok=True)
+    #swanlab_log = os.path.join('/mnt/sda2/lxy/ARGS_results/', config.dataset._YCB_CLASSES[0],'swanlab')
+    swanlab_log = os.path.join('/mnt/sda2/lxy/ARGS_results/', 'swanlab')
+    os.makedirs(swanlab_log, exist_ok=True) 
     swanlab.init(
         name=wandb_name,
         project='ARGS_1001',

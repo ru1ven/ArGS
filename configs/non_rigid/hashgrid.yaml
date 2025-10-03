@@ -62,7 +62,7 @@ opt:
   lambda_nr_tempo_scale_obj: 1e-2
   lambda_nr_tempo_rot_obj: 1e-2
 
-  lambda_nr_reg_obj: 1e-2
+  lambda_nr_reg_obj: 1e-2 
 
   non_rigid_lr: 1e-5
   nr_latent_lr: 1e-5

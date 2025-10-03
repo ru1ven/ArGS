@@ -81,7 +81,7 @@ opt:
   scaling_lr: 0.005
   rotation_lr: 0.001
 
-  pose_correction_lr: 1e-5
+  pose_correction_lr: 1e-6
   rigid_lr: 1e-4
   objrigid_lr: 1e-3
   non_rigid_lr: 1e-3

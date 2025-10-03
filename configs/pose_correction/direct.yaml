@@ -13,5 +13,5 @@ model:
 
 
 opt:
-  pose_correction_lr: 1e-4
+  pose_correction_lr: 1e-6
   lambda_pose: 0.

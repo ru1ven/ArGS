@@ -22,7 +22,7 @@ model:
 
 
 opt:
-  pose_correction_lr: 1e-5
+  pose_correction_lr: 1e-6
   lambda_pose_hand: 1e-2
   lambda_pose_obj: 1e-2
   lambda_mano_joint: 10
