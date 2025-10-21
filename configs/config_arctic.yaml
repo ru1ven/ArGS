@@ -1,16 +1,18 @@
 defaults:
   - _self_
-  #- dataset: arctic_waffleiron
-  #- dataset: arctic_microwave 
+  - dataset: arctic_waffleiron
   #- dataset: arctic_box
-  #- dataset: arctic_ketchup
+
   #- dataset: arctic_phone   
   #- dataset: arctic_notebook
-  #- dataset: arctic_laptop
-  #- dataset: arctic_espressomachine
   #- dataset: arctic_capsulemachine
-  - dataset: arctic_mixer
+  #- dataset: arctic_mixer
+  #- dataset: arctic_laptop  
+
+  #- dataset: arctic_ketchup
   #- dataset: arctic_scissors
+  #- dataset: arctic_espressomachine
+  #- dataset: arctic_microwave 
 
   - pose_correction: supervice
   - texture: sh
@@ -20,6 +22,9 @@ defaults:
   #- rigid: smpl_nn
   - option:
     - iter_arctic_50k
+
+
+checkpoint: /mnt/sda2/lxy/ARGS_results/waffleiron/_arctic_waffleiron-sam_.1_0_30k_nre3_detach/ckpt25000.pth
 
 test_iterations: [15000, 20000, 25000, 30000, 50000]
 save_iterations: [15000, 20000, 25000, 30000, 50000]
@@ -36,10 +41,13 @@ hydra:
 
 name: ${dataset_name}-${tag}
 
-tag: sam_nre3
+tag: vis_ours
 #tag: NR+R
 
 rigid_iter: 10000
+
+#rigid_iter: 30001 # clay
+#rigid_iter: 0 # stone
 
 model:
   gaussian:
@@ -131,9 +139,6 @@ detect_anomaly: false
 
 test_interval: -1
 seed: 0
-
-# start_checkpoint: /mnt/sda2/lxy/NonrigidGS_results/waffleiron/arctic_waffleiron-NR_15kfix+25knr/ckpt25000.pth
-
 
 
 mode: test

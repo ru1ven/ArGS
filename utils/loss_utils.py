@@ -80,7 +80,7 @@ def full_aiap_loss(gs_can, gs_obs, n_neighbors=5, articulated=False):
     cov_obs = gs_obs.get_covariance()
 
     if articulated:
-        ismovable = gs_can.get_dynamic > 0.5
+        ismovable = gs_can.get_dynamic.detach() > 0.5
         if ismovable.sum() > 10:
 
             xyz_can = xyz_can[ismovable.squeeze(1)]

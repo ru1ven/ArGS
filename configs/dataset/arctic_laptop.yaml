@@ -19,8 +19,9 @@ dataset:
   split_test: 's01_laptop_use_01_8'
   speedup: True
   ego_image_scale: 0.3
-  #train_views: [ 's01_box_use_01_1', 's01_box_use_01_5', 's01_box_use_01_8' ]
-  #test_views: [ 's01_box_use_01_4' ]
+  
+  # until_sam2: 10000
+  # lambda_sam2: 0.1
 
   _SUBJECTS : [
       's01',

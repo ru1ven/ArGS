@@ -586,8 +586,8 @@ class ObjRevoluteDeform(RigidDeform):
             return self.obj_rigid_deform(gaussians, iteration, camera, pose_model), loss_rigid
 
         # teacher（原始gaussians，只做forward，梯度不回传）
-        #teacher_dynamic = gaussians.get_raw_dynamic.detach()
-        teacher_dynamic = gaussians.get_raw_dynamic
+        teacher_dynamic = gaussians.get_raw_dynamic.detach()
+        #teacher_dynamic = gaussians.get_raw_dynamic
         student_xyz = canonical_gs._xyz
         student_rotation = canonical_gs._rotation
         student_scaling = canonical_gs._scaling

@@ -211,7 +211,10 @@ class Non_Rigid(NonRigidDeform):
         deltas = self.delta_mlp(pc_feature, cond=pose_feat)
 
         if self.ho_type == 'obj':
-            movable_prob = refined_gaussians.get_dynamic
+            if not delay:
+                movable_prob = refined_gaussians.get_dynamic
+            else:
+                movable_prob = refined_gaussians.get_dynamic.detach()
             deltas = deltas * movable_prob
 
         else:
