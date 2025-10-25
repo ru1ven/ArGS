@@ -241,7 +241,7 @@ class GaussianConverter(nn.Module):
         deformed_gaussians_hand_r = deformer_hand_r.rigid(refined_gaussians_hand_r, iteration, camera, None)
         deformed_gaussians_hand_l = deformer_hand_l.rigid(refined_gaussians_hand_l, iteration, camera,
                                                         None)
-        deformed_gaussians_obj, loss_reg_rigid = deformer_obj.rigid(refined_gaussians_obj, xyz_canonical, iteration, camera,
+        deformed_gaussians_obj, loss_reg_rigid, articulated_obj, pivot, axis = deformer_obj.rigid(refined_gaussians_obj, xyz_canonical, iteration, camera,
                                                 None, self.cfg.rigid_iter, rigid_delay, self.save_dir)
         if loss_reg_rigid is not None:
             loss_reg.update(loss_reg_rigid)
@@ -259,7 +259,7 @@ class GaussianConverter(nn.Module):
         # objcolor_precompute_rigid = self.objtexture(deformed_gaussians_obj, camera)
 
         return deformed_gaussians_hand_r, deformed_gaussians_hand_l,deformed_gaussians_obj, refined_gaussians_obj, loss_reg,\
-               color_precompute_r, color_precompute_l, objcolor_precompute, camera, movable_prob
+               color_precompute_r, color_precompute_l, objcolor_precompute, camera, movable_prob, articulated_obj, pivot, axis
 
 
     def optimize(self, iteration):

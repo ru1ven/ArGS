@@ -686,7 +686,7 @@ class ObjRevoluteDeform(RigidDeform):
 
         canonical_gs._xyz = deformed_xyz
         setattr(canonical_gs, 'rotation_precomp', dynamic_rotation_bar)
-        return self.obj_rigid_deform(canonical_gs, iteration, camera, pose_model), loss_rigid
+        return self.obj_rigid_deform(canonical_gs, iteration, camera, pose_model), loss_rigid, canonical_gs, pivot, axis
 
 
 

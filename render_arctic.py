@@ -9,7 +9,11 @@
 # For inquiries contact  george.drettakis@inria.fr
 #
 
+import json
 import os
+
+from scene.cameras import QueryCamerasLoader
+from utils.camera_utils import camera_to_JSON
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import shutil
@@ -27,7 +31,7 @@ from utils.loss_utils import l1_loss, ssim
 #import pyiqa #  nan
 from gaussian_renderer import render
 from scene import Scene, GaussianModel
-from utils.general_utils import fix_random, PSEvaluator, tensor_to_numpy_image, save_deltas
+from utils.general_utils import fix_random, PSEvaluator, save_axis, tensor_to_numpy_image, save_deltas
 from tqdm import tqdm
 from utils.loss_utils import full_aiap_loss
 
@@ -153,6 +157,8 @@ def validation(iteration, testing_iterations, testing_interval, rigid_delay, sce
         examples = []
 
         movable_prob = render_pkg["movable_prob"]
+        pivot = render_pkg["pivot"]
+        axis = render_pkg["axis"]
 
         full_image = torch.clamp(render_pkg["full_render"], 0.0, 1.0)
         full_gt_image = torch.clamp(data.full_image.to("cuda"), 0.0, 1.0)
@@ -219,10 +225,21 @@ def validation(iteration, testing_iterations, testing_interval, rigid_delay, sce
 
         # save model
         scene.gaussians_obj_group[list(scene.gaussians_obj_group.keys())[0]].save_ply(
-                        os.path.join(vis_dir, 'point_cloud_canonical','iteration_{}'.format(idx),'point_cloud.ply'))
+                        os.path.join(vis_dir, 'canonicalGS','iteration_{}'.format(idx),'point_cloud.ply'))
         
         render_pkg['obj_deformed_gaussian'].save_ply(
-                        os.path.join(vis_dir, 'point_cloud','iteration_{}'.format(idx),'point_cloud.ply'))
+                        os.path.join(vis_dir, 'partedGS','iteration_{}'.format(idx),'point_cloud.ply'))
+        os.makedirs(os.path.join(vis_dir,'articulation','iteration_{}'.format(idx)), exist_ok=True)
+        np.save(os.path.join(vis_dir,'articulation','iteration_{}'.format(idx),"pivot.npy"), pivot.detach().cpu().numpy())
+        np.save(os.path.join(vis_dir,'articulation','iteration_{}'.format(idx),"axis.npy"), axis.detach().cpu().numpy())
+
+        save_axis(render_pkg['obj_deformed_gaussian']._xyz.detach().cpu().numpy(), pivot.detach().cpu().numpy(), 
+                  axis.detach().cpu().numpy(), os.path.join(vis_dir,'articulation','iteration_{}'.format(idx)))
+        render_pkg['pc_articulated'].save_ply(
+                        os.path.join(vis_dir, 'articulation','iteration_{}'.format(idx),'point_cloud.ply'))
+        render_pkg['pc_articulated'].save_parted_ply(
+                        os.path.join(vis_dir, 'articulation','iteration_{}'.format(idx)))
+        
 
         # save articulation
         # if idx % 10 == 0:
@@ -235,6 +252,44 @@ def validation(iteration, testing_iterations, testing_interval, rigid_delay, sce
         #     except Exception as e:
         #         print(f"[Warning] Failed to save deltas: {e}")
         #         delta_norm = None
+
+        
+        pc_obj = render_pkg['obj_deformed_gaussian']
+        coord_min = torch.min(pc_obj._xyz.detach(), dim=0).values
+        coord_max = torch.max(pc_obj._xyz.detach(), dim=0).values
+
+        # 如果你希望使原点为中心（例如，将点云的中心移到原点），可以通过以下方式计算中心偏移量
+        center = (coord_min + coord_max) / 2
+
+        # 将点云的坐标移动到原点
+        pc_obj._xyz -= center
+
+        # 更新后的最小值和最大值
+        coord_min -= center
+        coord_max -= center
+        # pc_obj._xyz -= updated_camera.obj_trans.detach()        
+        pc_obj.save_ply(os.path.join(vis_dir, 'point_cloud','iteration_{}'.format(idx),'point_cloud.ply'), save_dynamic=False)
+
+        # generate camera
+        if idx == 0:
+            # save_path = os.path.join(vis_dir, 'point_cloud')
+            # os.makedirs(save_path, exist_ok=True)
+            # aabb = scene.metadata_obj[list(scene.gaussians_obj_group.keys())[0]]['obj_aabb']
+            # coord_min = aabb.coord_min
+            # coord_max = aabb.coord_max
+            print(coord_min)
+            print(coord_max)
+            cams = QueryCamerasLoader(coord_min, coord_max, cam_num=512).get_cam
+            json_cams = []
+            for cam_id, cam in enumerate(cams):
+                camera_entry = camera_to_JSON(cam_id, cam)
+                
+                json_cams.append(camera_entry)
+            with open( os.path.join(vis_dir, 'cameras.json'), 'w') as file:
+                json.dump(json_cams, file)
+
+            print(updated_camera.K)
+           
 
         # save mesh
         #mesh_path = os.path.join(vis_dir, 'obj_mesh_{}.obj'.format(idx))

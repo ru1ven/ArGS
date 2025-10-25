@@ -14,7 +14,6 @@ import time
 
 import torch
 from models import GaussianConverter
-from scene.cameras import Viewpoint_data
 from scene.gaussian_model import GaussianModel
 from dataset import load_dataset
 

@@ -39,8 +39,8 @@ def render(data,
     
     Background tensor (bg_color) must be on GPU!
     """
-    pc_hand_r, pc_hand_l,pc_obj, refined_pc_obj, loss_reg, colors_precomp_r,colors_precomp_l, obj_colors_precomp, updated_camera, movable_prob = \
-        scene.convert_gaussians(data, iteration, compute_loss, delay, prev_data=prev_data)
+    pc_hand_r, pc_hand_l,pc_obj, refined_pc_obj, loss_reg, colors_precomp_r,colors_precomp_l, obj_colors_precomp, updated_camera,\
+    movable_prob, pc_articulated, pivot, axis = scene.convert_gaussians(data, iteration, compute_loss, delay, prev_data=prev_data)
     if pose_refine:
         data = updated_camera
     if iteration <= 4 or iteration % 1001 == 0:
@@ -292,6 +292,9 @@ def render(data,
             "full_render": full_render_image,
             "novel_render": novel_render,
             "movable_prob": movable_prob,
+            'pc_articulated':pc_articulated,
+            "pivot": pivot,
+            "axis": axis,
 
             "viewspace_points_r": screenspace_points_hand_r,
             "viewspace_points_l": screenspace_points_hand_l,

@@ -415,7 +415,7 @@ class GaussianModel:
                 param_group['lr'] = lr
                 return lr
 
-    def construct_list_of_attributes(self):
+    def construct_list_of_attributes(self, save_dynamic=True):
         l = ['x', 'y', 'z', 'nx', 'ny', 'nz']
         # All channels except the 3 DC
         for i in range(self._features_dc.shape[1]*self._features_dc.shape[2]):
@@ -423,14 +423,15 @@ class GaussianModel:
         for i in range(self._features_rest.shape[1]*self._features_rest.shape[2]):
             l.append('f_rest_{}'.format(i))
         l.append('opacity')
-        l.append('dynamic')
+        if save_dynamic:
+            l.append('dynamic')
         for i in range(self._scaling.shape[1]):
             l.append('scale_{}'.format(i))
         for i in range(self._rotation.shape[1]):
             l.append('rot_{}'.format(i))
         return l
 
-    def save_ply(self, path):
+    def save_ply(self, path, save_dynamic=True, clean=False):
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
         xyz = self._xyz.detach().cpu().numpy()
@@ -438,18 +439,98 @@ class GaussianModel:
         f_dc = self._features_dc.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
         f_rest = self._features_rest.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
         opacities = self._opacity.detach().cpu().numpy()
-        dynamic = self._dynamic.detach().cpu().numpy()
+        if save_dynamic:
+            dynamic = self._dynamic.detach().cpu().numpy()
         scale = self._scaling.detach().cpu().numpy()
         rotation = self._rotation.detach().cpu().numpy()
 
-        dtype_full = [(attribute, 'f4') for attribute in self.construct_list_of_attributes()]
+        if clean:
+            # ---- Step 1: 过滤低透明度点 ----
+            valid_mask = opacities[:, 0] >= 0.01
+            removed_count = np.count_nonzero(~valid_mask)
+            # print(f"🧹 已筛除低透明度点数: {removed_count} (opacity < 0.01)")
+
+            # 过滤后的数据
+            xyz = xyz[valid_mask]
+            normals = normals[valid_mask]
+            f_dc = f_dc[valid_mask]
+            f_rest = f_rest[valid_mask]
+            opacities = opacities[valid_mask]
+            if save_dynamic:
+                dynamic = dynamic[valid_mask]
+            scale = scale[valid_mask]
+            rotation = rotation[valid_mask]
+
+        dtype_full = [(attribute, 'f4') for attribute in self.construct_list_of_attributes(save_dynamic)]
 
         elements = np.empty(xyz.shape[0], dtype=dtype_full)
-        attributes = np.concatenate((xyz, normals, f_dc, f_rest, opacities, dynamic, scale, rotation), axis=1)
+        if save_dynamic:
+            attributes = np.concatenate((xyz, normals, f_dc, f_rest, opacities, dynamic, scale, rotation), axis=1)
+        else:
+            attributes = np.concatenate((xyz, normals, f_dc, f_rest, opacities, scale, rotation), axis=1)
         elements[:] = list(map(tuple, attributes))
         el = PlyElement.describe(elements, 'vertex')
         PlyData([el]).write(path)
 
+   
+    def save_parted_ply(self, path, clean=False):
+        os.makedirs(path, exist_ok=True)
+
+            # ---- 数据提取 ----
+        xyz = self._xyz.detach().cpu().numpy()
+        normals = np.zeros_like(xyz)
+
+        f_dc = self._features_dc.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
+        f_rest = self._features_rest.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
+        opacities = self._opacity.detach().cpu().numpy()
+        dynamic = self._dynamic.detach().cpu().numpy()
+        scale = self._scaling.detach().cpu().numpy()
+        rotation = self._rotation.detach().cpu().numpy()
+
+        dtype_full = [(attribute, 'f4') for attribute in self.construct_list_of_attributes(True)]
+        if clean:
+            # ---- Step 1: 过滤低透明度点 ----
+            valid_mask = opacities[:, 0] >= 0.01
+            removed_count = np.count_nonzero(~valid_mask)
+            # print(f"🧹 已筛除低透明度点数: {removed_count} (opacity < 0.01)")
+
+            # 过滤后的数据
+            xyz = xyz[valid_mask]
+            normals = normals[valid_mask]
+            f_dc = f_dc[valid_mask]
+            f_rest = f_rest[valid_mask]
+            opacities = opacities[valid_mask]
+            dynamic = dynamic[valid_mask]
+            scale = scale[valid_mask]
+            rotation = rotation[valid_mask]
+
+        # ---- Step 2: 按 dynamic 分两部分 ----
+        mask_part0 = dynamic[:, 0] <= 0.5
+        mask_part1 = ~mask_part0
+        masks = [mask_part0, mask_part1]
+
+        # ---- Step 3: 分别保存 ----
+        for i, mask in enumerate(masks):
+            attributes = np.concatenate((
+                xyz[mask],
+                normals[mask],
+                f_dc[mask],
+                f_rest[mask],
+                opacities[mask],
+                dynamic[mask],
+                scale[mask],
+                rotation[mask]
+            ), axis=1)
+
+            elements = np.empty(attributes.shape[0], dtype=dtype_full)
+            elements[:] = list(map(tuple, attributes))
+
+            el = PlyElement.describe(elements, 'vertex')
+        
+        
+            PlyData([el]).write(os.path.join(path, f'part_{i}.ply'))
+
+    
     def reset_opacity(self):
         opacities_new = inverse_sigmoid(torch.min(self.get_opacity, torch.ones_like(self.get_opacity)*0.01))
         optimizable_tensors = self.replace_tensor_to_optimizer(opacities_new, "opacity")

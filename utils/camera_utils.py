@@ -265,3 +265,31 @@ def get_frustum_mask(points: torch.Tensor, cameras, near: float = 0.02, far: flo
     # Apply frustum mask
     mask = torch.any(cull_near_fars & (u >= 0) & (u <= W-1) & (v >= 0) & (v <= H-1), dim=0)
     return mask
+
+
+
+def camera_to_JSON(id, camera):
+    Rt = np.zeros((4, 4))
+    
+    Rt[:3, :3] = camera.R.detach().cpu().numpy().transpose()
+    Rt[:3, 3] = camera.T.detach().cpu().numpy()
+    Rt[3, 3] = 1.0
+
+    W2C = np.linalg.inv(Rt)
+    pos = W2C[:3, 3]
+    rot = W2C[:3, :3]
+    serializable_array_2d = [x.tolist() for x in rot]
+   
+    camera_entry = {
+        'id' : id,
+        'img_name' : 'debug',
+        'width' : camera.image_width,
+        'height' : camera.image_height,
+        'position': pos.tolist(),
+        'rotation': serializable_array_2d,
+        'fy' : fov2focal(camera.FoVy, camera.image_height),
+        'fx' : fov2focal(camera.FoVx, camera.image_width),
+        'cy' : float(camera.K[1][2]),
+        'cx' : float(camera.K[0][2])
+    }
+    return camera_entry

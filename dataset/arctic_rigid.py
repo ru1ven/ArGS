@@ -14,7 +14,7 @@ import numpy as np
 import json
 from utils.dataset_utils import get_02v_bone_transforms, fetchPly, storePly, AABB, get_valid, pad_jts2d, \
     transform_2d_for_speedup, apply_w2c_pose_numpy, update_K_after_bbox_crop_resize, load_K_Rt_from_P
-from scene.cameras import Camera, Camera_multi_batch
+from scene.cameras import Camera
 from utils.camera_utils import freeview_camera
 
 import torch

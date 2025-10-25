@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
+import json
 import os
 import sys
 import argparse
@@ -12,229 +13,170 @@ from multiprocessing import Process, Queue
 import pandas as pd
 import trimesh
 import shutil
+from scipy.spatial import cKDTree as KDTree
+from utils.solver import icp_rts, icp_ts
 
-_SUBJECTS = [
-    '20200709-subject-01',
-    '20200813-subject-02',
-    '20200820-subject-03',
-    '20200903-subject-04',
-    '20200908-subject-05',
-    '20200918-subject-06',
-    '20200928-subject-07',
-    '20201002-subject-08',
-    '20201015-subject-09',
-    '20201022-subject-10',
+mesh_paths = [
+    "/mnt/sda2/lxy/ARGS_results/box/arctic_box-vis_ours/vis/",
+    "/mnt/sda2/lxy/ARGS_results/mixer/arctic_mixer-vis_ours/vis/",
+    "/mnt/sda2/lxy/ARGS_results/waffleiron/arctic_waffleiron-vis_ours/vis/",
+    "/mnt/sda2/lxy/ARGS_results/phone/arctic_phone-vis_ours/vis/",
+    "/mnt/sda2/lxy/ARGS_results/ketchup/arctic_ketchup-vis_ours/vis/",
+    "/mnt/sda2/lxy/ARGS_results/espressomachine/arctic_espressomachine-vis_ours/vis/",
+    "/mnt/sda2/lxy/ARGS_results/microwave/arctic_microwave-vis_ours/vis/",
+    "/mnt/sda2/lxy/ARGS_results/scissors/arctic_scissors-vis_ours/vis/",
+    "/mnt/sda2/lxy/ARGS_results/laptop/arctic_laptop-vis_ours/vis/",
+    "/mnt/sda2/lxy/ARGS_results/capsulemachine/arctic_capsulemachine-vis_ours/vis/",
+    "/mnt/sda2/lxy/ARGS_results/notebook/arctic_notebook-vis_ours/vis/",
+]
+
+test_splits = [
+    "s01/box_use_02/1",
+    "s01/mixer_use_01/1",
+    "s01/waffleiron_use_01/1",
+    "s01/phone_use_01/1",
+    "s01/ketchup_use_02/1",
+    "s01/espressomachine_use_01/3",
+    "s01/microwave_use_01/6",
+    "s01/scissors_use_01/1",
+    "s01/laptop_use_01/1",
+    "s01/capsulemachine_use_01/1",
+    "s01/notebook_use_01/1",
 ]
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dir', '-e', required=True, type=str)
-    parser.add_argument('--testset', '-testset', default='dexycb', type=str)
     parser.add_argument('--num_proc', default=10, type=int)
     args = parser.parse_args()
 
     return args
 
 
-def evaluate(queue, db, output_dir):
-    for idx, sample in tqdm(enumerate(db.data)):
-        error_dict = db._evaluate(output_dir, idx)
-        queue.put([tuple(error_dict.values())])
+def evaluate(mesh_path, obj_gt_path, obj_gt_names):
+    chamfers_obj = []
+    fscores_obj_5 = []
+    fscores_obj_10 = []
 
-# python eval.py -e /home/cyc/pycharm/lxy/gSDF/outputs_test/sdf_pcl/ -testset dexycb
+    for idx, obj_gt_filename in tqdm(enumerate(obj_gt_names)):
+        mesh_obj = trimesh.load(os.path.join(mesh_path,'point_cloud', f'iteration_{idx}', 'fused_mesh.ply'), process=False)
+        mesh_obj_gt = trimesh.load(os.path.join(obj_gt_path, obj_gt_filename + '.obj'), process=False)
+
+        coord_min = np.min(mesh_obj_gt.vertices, axis=0)
+        coord_max = np.max(mesh_obj_gt.vertices, axis=0)
+        center = (coord_min + coord_max) / 2
+
+        # 模型居中
+        mesh_obj_gt.vertices -= center
+
+        # ICP alignment
+        #pred_obj_mesh = mesh_obj
+        icp_solver = icp_ts(mesh_obj, mesh_obj_gt)
+        icp_solver.sample_mesh(30000, 'both')
+        icp_solver.run_icp_f(max_iter=100)
+        pred_obj_mesh = icp_solver.get_source_mesh()
+
+        if idx == 0:
+            pred_obj_mesh.export(os.path.join(mesh_path,'point_cloud', f'iteration_{idx}', 'mesh_aligned.ply'))
+            mesh_obj_gt.export(os.path.join(mesh_path,'point_cloud', f'iteration_{idx}', 'mesh_gt.ply'))
+
+        pred_obj_points, _ = trimesh.sample.sample_surface(pred_obj_mesh, 30000)
+        gt_obj_points, _ = trimesh.sample.sample_surface(mesh_obj_gt, 30000)
+        pred_obj_points *= 100.
+        gt_obj_points *= 100.
+
+        # one direction
+        gen_points_kd_tree = KDTree(pred_obj_points)
+        one_distances, one_vertex_ids = gen_points_kd_tree.query(gt_obj_points)
+        gt_to_gen_chamfer = np.mean(np.square(one_distances))
+        # other direction
+        gt_points_kd_tree = KDTree(gt_obj_points)
+        two_distances, two_vertex_ids = gt_points_kd_tree.query(pred_obj_points)
+        gen_to_gt_chamfer = np.mean(np.square(two_distances))
+        chamfer_obj = gt_to_gen_chamfer + gen_to_gt_chamfer
+        print(chamfer_obj)
+
+        threshold = 0.5 # 5 mm
+        precision_1 = np.mean(one_distances < threshold).astype(np.float32)
+        precision_2 = np.mean(two_distances < threshold).astype(np.float32)
+        fscore_obj_5 = 2 * precision_1 * precision_2 / (precision_1 + precision_2 + 1e-7)
+
+        threshold = 1.0 # 10 mm
+        precision_1 = np.mean(one_distances < threshold).astype(np.float32)
+        precision_2 = np.mean(two_distances < threshold).astype(np.float32)
+        fscore_obj_10 = 2 * precision_1 * precision_2 / (precision_1 + precision_2 + 1e-7)
+        chamfers_obj.append(chamfer_obj)
+        fscores_obj_5.append(fscore_obj_5)
+        fscores_obj_10.append(fscore_obj_10)
+    return chamfers_obj, fscores_obj_5, fscores_obj_10
+
+
+
+
+# python eval.py
 def main():
-    # argument parse and create log
-    args = parse_args()
-    #testset = args.dir.strip('/').split('/')[-1].split('_')[1]
-    testset = args.testset
-    exec(f'from datasets.{testset}.{testset} import {testset}')
+    for i, mesh_path in enumerate(mesh_paths):
 
-    if testset == 'dexycb':
-        data_root = '../datasets/dexycb/data/'
-
-        mesh_hand_source = '../datasets/dexycb/data/mesh_hand/'
-        mesh_obj_source = '../datasets/dexycb/data/mesh_obj/'
-
-
-    start_points = []
-    end_points = []
-    division = cfg['num_testset_samples'] // args.num_proc
-    for i in range(args.num_proc):
-        start_point = i * division
-        if i != args.num_proc - 1:
-            end_point = start_point + division
-        else:
-            end_point = cfg['num_testset_samples']
-        start_points.append(start_point)
-        end_points.append(end_point)
-
-    queue = Queue()
-    process_list = []
-    for i in range(args.num_proc):
-        testset_db = eval(testset)('test_' + cfg['testset_split'], start_points[i], end_points[i])
-        p = Process(target=evaluate, args=(queue, testset_db, args.dir))
-        p.start()
-        process_list.append(p)
-
-    summary = []
-    for p in process_list:
-        while p.is_alive():
-            while False == queue.empty():
-                data = queue.get()
-                summary = summary + data
+        # argument parse and create log
+        args = parse_args()
+        
+        meta = os.path.join("/mnt/sda2/lxy/dataset/hand/arctic_seqs/splits/train/{}.npy"
+                            .format(test_splits[i].replace("/","_")))
+        with open("/mnt/sda2/lxy/dataset/hand/arctic/meta/misc.json", "r") as f:
+            misc = json.load(f)
     
-    for p in process_list:
-        p.join()
+        ioi_offset = misc['s01']["ioi_offset"]
+        meta_data = np.load(meta, allow_pickle=True).item()
 
-    summary = sorted(summary, reverse=False, key=lambda result: result[0])
-    summary_filename = "eval_result.txt"
+        obj_gt_names = []
+        obj_gt_path = '/mnt/sda2/lxy/dataset/hand/arctic_seqs/mesh_obj/'+test_splits[i]
+        
+        imgnames = meta_data["imgnames"]
+        
+        for imgname in imgnames:
+            sid, seq_name, view_idx, image_idx = imgname.split("/")[-4:]
+            vidx = int(image_idx.split(".")[0]) - ioi_offset
+            if vidx % 2 == 1:
+                obj_gt_names.append(image_idx.split(".")[0])
 
-    with open(os.path.join(args.dir, summary_filename), "w") as f:
-        eval_result = [[] for i in range(9)]
-        name_list = ['sample_id', 'chamfer hand', 'fs_hand@1mm', 'fs_hand@5mm', 'chamfer obj', 'fs_obj@5mm', 'fs_obj@10mm', 'hand joint', 'obj center', 'obj corner']
-        data_list = []
-        for idx, result in enumerate(summary):
-            data_sample = [result[0]]
-            for i in range(9):
-                if result[i + 1] is not None:
-                    eval_result[i].append(result[i + 1])
-                    data_sample.append(result[i + 1].round(3))
-                else:
-                    data_sample.append(result[i + 1])
-            data_list.append(data_sample)
-        f.write(pd.DataFrame(data_list, columns=name_list, index=[''] * len(summary), dtype=str).to_string())
-        f.write('\n')
+        chamfers_obj, fscores_obj_5, fscores_obj_10 = evaluate(mesh_path, obj_gt_path, obj_gt_names)
+        #summary_filename = os.path.join(mesh+path, "eval_result_{}.txt".format(test_splits[i]).replace("/","_"))
 
-        for idx, _ in enumerate(eval_result):
-            new_array = []
-            for number in eval_result[idx]:
-                if not np.isnan(number):
-                    new_array.append(number)
-            eval_result[idx] = new_array
+        summary_filename = os.path.join("/mnt/sda2/lxy/ARGS_results/", "eval_result_{}.txt".format(test_splits[i]).replace("/","_"))
 
-        mean_chamfer_hand = "mean hand chamfer: {}\n".format(np.mean(eval_result[0]))
-        median_chamfer_hand = "median hand chamfer: {}\n".format(np.median(eval_result[0]))
-        fscore_hand_1 = "f-score hand @ 1mm: {}\n".format(np.mean(eval_result[1]))
-        fscore_hand_5 = "f-score hand @ 5mm: {}\n".format(np.mean(eval_result[2]))
-        mean_chamfer_obj = "mean obj chamfer: {}\n".format(np.mean(eval_result[3]))
-        median_chamfer_obj = "median obj chamfer: {}\n".format(np.median(eval_result[3]))
-        fscore_obj_1 = "f-score obj @ 5mm: {}\n".format(np.mean(eval_result[4]))
-        fscore_obj_5 = "f-score obj @ 10mm: {}\n".format(np.mean(eval_result[5]))
-        mean_mano_joint_err = "mean mano joint error: {}\n".format(np.mean(eval_result[6]))
-        mean_obj_center_err = "mean obj center error: {}\n".format(np.mean(eval_result[7]))
-        mean_obj_corner_err = "mean obj corner error: {}\n".format(np.mean(eval_result[8]))
-        print(mean_chamfer_hand); f.write(mean_chamfer_hand)
-        print(median_chamfer_hand); f.write(median_chamfer_hand)
-        print(fscore_hand_1); f.write(fscore_hand_1)
-        print(fscore_hand_5); f.write(fscore_hand_5)
-        print(mean_chamfer_obj); f.write(mean_chamfer_obj)
-        print(median_chamfer_obj); f.write(median_chamfer_obj)
-        print(fscore_obj_1); f.write(fscore_obj_1)
-        print(fscore_obj_5); f.write(fscore_obj_5)
-        print(mean_mano_joint_err); f.write(mean_mano_joint_err)
-        print(mean_obj_center_err); f.write(mean_obj_center_err)
-        print(mean_obj_corner_err); f.write(mean_obj_corner_err)
+        with open(summary_filename, "w") as f:
+            eval_result = [[] for i in range(3)]
+            name_list = ['sample_id',  'chamfer obj', 'fs_obj@5mm', 'fs_obj@10mm']
+            data_list = []
+            for idx, obj_name in enumerate(obj_gt_names):
+                result = chamfers_obj[idx], fscores_obj_5[idx], fscores_obj_10[idx]
+                data_sample = [obj_name]
+                for i in range(3):
+                    eval_result[i].append(result[i])
+                    data_sample.append(result[i])
+                data_list.append(data_sample)
+            f.write(pd.DataFrame(data_list, columns=name_list, index=[''] * len(obj_gt_names), dtype=str).to_string())
+            f.write('\n')
 
-        worst_hand_dir = os.path.join(args.dir, 'worst_hand'); os.makedirs(worst_hand_dir, exist_ok=True)
-        best_hand_dir = os.path.join(args.dir, 'best_hand'); os.makedirs(best_hand_dir, exist_ok=True)
-        best_obj_dir = os.path.join(args.dir, 'best_obj'); os.makedirs(best_obj_dir, exist_ok=True)
-        worst_obj_dir = os.path.join(args.dir, 'worst_obj'); os.makedirs(worst_obj_dir, exist_ok=True)
+            for idx, _ in enumerate(eval_result):
+                new_array = []
+                for number in eval_result[idx]:
+                    if not np.isnan(number):
+                        new_array.append(number)
+                eval_result[idx] = new_array
 
-        # begin to handle the hand case
-        summary_hand = []
-        for idx, sample in enumerate(summary):
-            if sample[1] is not None:
-                summary_hand.append(sample)
-        if len(summary_hand) > 40:
-            summary_hand = sorted(summary_hand, reverse=False, key=lambda result: result[1])
-            for i in range(len(summary_hand)):
-                sample_id = summary_hand[i][0]
-                if i < 50 or i > len(summary_hand) - 51:
-                    if i < 50:
-                        sample_dir = os.path.join(best_hand_dir, sample_id)
-                    else:
-                        sample_dir = os.path.join(worst_hand_dir, sample_id)
-                    os.makedirs(sample_dir, exist_ok=True)
-
-                    if testset == 'obman':
-                        shutil.copy2(os.path.join(rgb_source, sample_id + '.jpg'), sample_dir)
-                        gt_mesh_hand = trimesh.load(os.path.join(mesh_hand_source, sample_id + '.obj'), process=False)
-                        gt_mesh_hand.export(os.path.join(sample_dir, sample_id + '_gt_hand.glb'))
-                        gt_mesh_obj = trimesh.load(os.path.join(mesh_obj_source, sample_id + '.obj'), process=False)
-                        gt_mesh_obj.export(os.path.join(sample_dir, sample_id + '_gt_obj.glb'))
-                        gt_mesh_fuse = trimesh.util.concatenate(gt_mesh_hand, gt_mesh_obj)
-                        gt_mesh_fuse.export(os.path.join(sample_dir, sample_id + '_gt_fuse.glb'))
-                    elif testset == 'dexycb':
-                        subject_id = _SUBJECTS[int(sample_id.split('_')[0]) - 1]
-                        video_id = '_'.join(sample_id.split('_')[1:3])
-                        cam_id = sample_id.split('_')[-2]
-                        frame_id = sample_id.split('_')[-1].rjust(6, '0')
-                        rgb_path = os.path.join(data_root, subject_id, video_id, cam_id, 'color_' + frame_id + '.jpg')
-                        shutil.copy2(rgb_path, sample_dir)
-                        gt_mesh_hand = trimesh.load(os.path.join(mesh_hand_source, sample_id + '.obj'), process=False)
-                        gt_mesh_hand.export(os.path.join(sample_dir, sample_id + '_gt_hand.glb'))
-                        gt_mesh_obj = trimesh.load(os.path.join(mesh_obj_source, sample_id + '.obj'), process=False)
-                        gt_mesh_obj.export(os.path.join(sample_dir, sample_id + '_gt_obj.glb'))
-                        gt_mesh_fuse = trimesh.util.concatenate(gt_mesh_hand, gt_mesh_obj)
-                        gt_mesh_fuse.export(os.path.join(sample_dir, sample_id + '_gt_fuse.glb'))
-
-                    mesh_hand = trimesh.load(os.path.join(args.dir, 'sdf_mesh', sample_id + '_hand.ply'), process=False)
-                    mesh_hand.export(os.path.join(sample_dir, sample_id + '_hand.glb'))
-                    try:
-                        mesh_obj = trimesh.load(os.path.join(args.dir, 'sdf_mesh', sample_id + '_obj.ply'), process=False)
-                        mesh_obj.export(os.path.join(sample_dir, sample_id + '_obj.glb'))
-                        mesh_fuse = trimesh.util.concatenate(mesh_hand, mesh_obj)
-                        mesh_fuse.export(os.path.join(sample_dir, sample_id + '_fuse.glb'))
-                    except:
-                        continue
-               
-        summary_obj = []
-        for idx, sample in enumerate(summary):
-            if sample[4] is not None:
-                summary_obj.append(sample)
-        if len(summary_obj) > 40:
-            summary_obj = sorted(summary_obj, reverse=False, key=lambda result: result[1])
-            for i in range(len(summary_obj)):
-                sample_id = summary_obj[i][0]
-                if i < 50 or i > len(summary_obj) - 51:
-                    if i < 50:
-                        sample_dir = os.path.join(best_obj_dir, sample_id)
-                    else:
-                        sample_dir = os.path.join(worst_obj_dir, sample_id)
-                    os.makedirs(sample_dir, exist_ok=True)
-
-                    if testset == 'obman':
-                        shutil.copy2(os.path.join(rgb_source, sample_id + '.jpg'), sample_dir)
-                        gt_mesh_hand = trimesh.load(os.path.join(mesh_hand_source, sample_id + '.obj'), process=False)
-                        gt_mesh_hand.export(os.path.join(sample_dir, sample_id + '_gt_hand.glb'))
-                        gt_mesh_obj = trimesh.load(os.path.join(mesh_obj_source, sample_id + '.obj'), process=False)
-                        gt_mesh_obj.export(os.path.join(sample_dir, sample_id + '_gt_obj.glb'))
-                        gt_mesh_fuse = trimesh.util.concatenate(gt_mesh_hand, gt_mesh_obj)
-                        gt_mesh_fuse.export(os.path.join(sample_dir, sample_id + '_gt_fuse.glb'))
-                    elif testset == 'dexycb':
-                        subject_id = _SUBJECTS[int(sample_id.split('_')[0]) - 1]
-                        video_id = '_'.join(sample_id.split('_')[1:3])
-                        cam_id = sample_id.split('_')[-2]
-                        frame_id = sample_id.split('_')[-1].rjust(6, '0')
-                        rgb_path = os.path.join(data_root, subject_id, video_id, cam_id, 'color_' + frame_id + '.jpg')
-                        shutil.copy2(rgb_path, sample_dir)
-                        gt_mesh_hand = trimesh.load(os.path.join(mesh_hand_source, sample_id + '.obj'), process=False)
-                        gt_mesh_hand.export(os.path.join(sample_dir, sample_id + '_gt_hand.glb'))
-                        gt_mesh_obj = trimesh.load(os.path.join(mesh_obj_source, sample_id + '.obj'), process=False)
-                        gt_mesh_obj.export(os.path.join(sample_dir, sample_id + '_gt_obj.glb'))
-                        gt_mesh_fuse = trimesh.util.concatenate(gt_mesh_hand, gt_mesh_obj)
-                        gt_mesh_fuse.export(os.path.join(sample_dir, sample_id + '_gt_fuse.glb'))
-
-                    mesh_obj = trimesh.load(os.path.join(args.dir, 'sdf_mesh', sample_id + '_obj.ply'), process=False)
-                    mesh_obj.export(os.path.join(sample_dir, sample_id + '_obj.glb'))
-                    try:
-                        mesh_hand = trimesh.load(os.path.join(args.dir, 'sdf_mesh', sample_id + '_hand.ply'), process=False)
-                        mesh_hand.export(os.path.join(sample_dir, sample_id + '_hand.glb'))
-                        mesh_fuse = trimesh.util.concatenate(mesh_hand, mesh_obj)
-                        mesh_fuse.export(os.path.join(sample_dir, sample_id + '_fuse.glb'))
-                    except:
-                        continue
+           
+            mean_chamfer_obj = "mean obj chamfer: {}\n".format(np.mean(eval_result[0]))
+            median_chamfer_obj = "median obj chamfer: {}\n".format(np.median(eval_result[0]))
+            fscore_obj_1 = "f-score obj @ 5mm: {}\n".format(np.mean(eval_result[1]))
+            fscore_obj_5 = "f-score obj @ 10mm: {}\n".format(np.mean(eval_result[2]))
+            
+            print(mean_chamfer_obj); f.write(mean_chamfer_obj)
+            print(median_chamfer_obj); f.write(median_chamfer_obj)
+            print(fscore_obj_1); f.write(fscore_obj_1)
+            print(fscore_obj_5); f.write(fscore_obj_5)
+            
+           
 
 if __name__ == "__main__":
     main()
