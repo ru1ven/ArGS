@@ -494,7 +494,7 @@ class ObjRevoluteDeform(RigidDeform):
 
     def forward(self, gaussians, canonical_gs, iteration, camera, pose_model, rigid_iter, delay=False, save_dir=None):
         if delay:
-            return self.obj_rigid_deform(gaussians, iteration, camera, pose_model), {}
+            return self.obj_rigid_deform(gaussians, iteration, camera, pose_model), {}, None,  None, None
 
             # teacher（原始gaussians，只做forward，梯度不回传）
             #with torch.no_grad():

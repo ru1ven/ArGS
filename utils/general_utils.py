@@ -900,53 +900,71 @@ def visualize_axis_pointcloud(
     print(f"✅ 已生成点云 OBJ: {file_name}, 总点数: {total_points}")
     return file_name
 
-
-def save_axis(
+def save_axis( 
     xyz,
     pivot,
     axis,
     out_dir,
-    axis_len_ratio=0.5,      # 轴长度占点云对角线比例
-    radius_ratio=0.005,      # 圆柱半径占对角线比例
-    cone_height_ratio=0.12,  # 箭头高度占半轴长比例
-    circle_resolution=30
+    axis_len_ratio=1,      # 轴长度占点云对角线比例
+    radius_ratio=0.01,      # 圆柱半径占对角线比例
+    cone_height_ratio=0.15,  # 箭头高度占半轴长比例
+    circle_resolution=30,
+    arrow_at_end=False        # 控制箭头是否在轴的末端 (True为末端，False为起点)
 ):
+    axis = -axis
     """
     将点云和自适应旋转轴分开保存为 OBJ。
     - 轴穿过 pivot
     - 轴长度和厚度根据点云范围自适应
     - 仅一端带箭头
+    - 轴穿过 pivot，pivot可以不在中心，调整两端比例
+    - 计算点云对轴的截断位置，并且前后延伸0.2倍长度
     """
     os.makedirs(out_dir, exist_ok=True)
     xyz = np.asarray(xyz)
     pivot = np.asarray(pivot)
     axis = np.asarray(axis) / np.linalg.norm(axis)
 
-    # 点云范围
-    diag_len = np.linalg.norm(xyz.max(axis=0) - xyz.min(axis=0))
+    # 计算点云范围
+    min_xyz = xyz.min(axis=0)
+    max_xyz = xyz.max(axis=0)
+    diag_len = np.linalg.norm(max_xyz - min_xyz)
+    
+    # 计算轴的半长度和半径
     half_len = diag_len * axis_len_ratio * 0.5
     radius = diag_len * radius_ratio
     cone_height = half_len * cone_height_ratio
 
-    # 轴起止点
+    # 计算轴的起点和终点
     start = pivot - axis * half_len
     end = pivot + axis * half_len
+
+    # 计算轴在点云范围内的截断位置
+    # 我们投影点云的最小值和最大值到轴的方向
+    min_proj = np.dot(min_xyz - pivot, axis)
+    max_proj = np.dot(max_xyz - pivot, axis)
+
+    # 找到点云在轴上的最小和最大投影位置
+    min_proj, max_proj = sorted([min_proj, max_proj])
+
+    # 延伸轴的两端，确保轴的前后各延伸0.2倍的长度
+    # 我们取点云截断位置的前后各延伸一段距离
+    extend_factor = 0.3
+    extended_min_proj = min_proj - (max_proj - min_proj) * extend_factor
+    extended_max_proj = max_proj + (max_proj - min_proj) * extend_factor
+
+    # 计算轴的新的起点和终点
+    start = pivot + axis * extended_min_proj
+    end = pivot + axis * extended_max_proj
     cone_base = end - axis * cone_height
 
-    # 垂直基向量
+    # 垂直基向量，用于生成圆柱和箭头的侧面
     v = np.array([1, 0, 0])
     if abs(np.dot(v, axis)) > 0.9:
         v = np.array([0, 1, 0])
     u1 = np.cross(axis, v)
     u1 /= np.linalg.norm(u1)
     u2 = np.cross(axis, u1)
-
-    # ---------------- 点云 OBJ ----------------
-    # pointcloud_file = os.path.join(out_dir, "pointcloud.obj")
-    # with open(pointcloud_file, "w") as f:
-    #     for p in xyz:
-    #         f.write(f"v {p[0]} {p[1]} {p[2]} 0.8 0.8 0.8\n")
-    # print(f"✅ 点云 OBJ 保存: {pointcloud_file}, {len(xyz)} 顶点")
 
     # ---------------- 轴 OBJ ----------------
     axis_file = os.path.join(out_dir, "axis.obj")
@@ -988,16 +1006,103 @@ def save_axis(
         for face in faces:
             f.write(f"f {face[0]+1} {face[1]+1} {face[2]+1}\n")
 
-def save_pointcloud(xyz, filename):
-    """保存为 .ply 点云文件"""
-    xyz = xyz.detach().cpu().numpy()
-    with open(filename, 'w') as f:
-        f.write("ply\n")
-        f.write("format ascii 1.0\n")
-        f.write(f"element vertex {xyz.shape[0]}\n")
-        f.write("property float x\n")
-        f.write("property float y\n")
-        f.write("property float z\n")
-        f.write("end_header\n")
-        for p in xyz:
-            f.write(f"{p[0]} {p[1]} {p[2]}\n")
+# def save_axis(
+#     xyz,
+#     pivot,
+#     axis,
+#     out_dir,
+#     axis_len_ratio=0.5,      # 轴长度占点云对角线比例
+#     radius_ratio=0.005,      # 圆柱半径占对角线比例
+#     cone_height_ratio=0.12,  # 箭头高度占半轴长比例
+#     circle_resolution=30
+# ):
+#     """
+#     将点云和自适应旋转轴分开保存为 OBJ。
+#     - 轴穿过 pivot
+#     - 轴长度和厚度根据点云范围自适应
+#     - 仅一端带箭头
+#     """
+#     os.makedirs(out_dir, exist_ok=True)
+#     xyz = np.asarray(xyz)
+#     pivot = np.asarray(pivot)
+#     axis = np.asarray(axis) / np.linalg.norm(axis)
+
+#     # 点云范围
+#     diag_len = np.linalg.norm(xyz.max(axis=0) - xyz.min(axis=0))
+#     half_len = diag_len * axis_len_ratio * 0.5
+#     radius = diag_len * radius_ratio
+#     cone_height = half_len * cone_height_ratio
+
+#     # 轴起止点
+#     start = pivot - axis * half_len
+#     end = pivot + axis * half_len
+#     cone_base = end - axis * cone_height
+
+#     # 垂直基向量
+#     v = np.array([1, 0, 0])
+#     if abs(np.dot(v, axis)) > 0.9:
+#         v = np.array([0, 1, 0])
+#     u1 = np.cross(axis, v)
+#     u1 /= np.linalg.norm(u1)
+#     u2 = np.cross(axis, u1)
+
+#     # ---------------- 点云 OBJ ----------------
+#     # pointcloud_file = os.path.join(out_dir, "pointcloud.obj")
+#     # with open(pointcloud_file, "w") as f:
+#     #     for p in xyz:
+#     #         f.write(f"v {p[0]} {p[1]} {p[2]} 0.8 0.8 0.8\n")
+#     # print(f"✅ 点云 OBJ 保存: {pointcloud_file}, {len(xyz)} 顶点")
+
+#     # ---------------- 轴 OBJ ----------------
+#     axis_file = os.path.join(out_dir, "axis.obj")
+#     vertices, faces = [], []
+
+#     # 圆柱体
+#     for i in range(circle_resolution):
+#         theta = 2 * np.pi * i / circle_resolution
+#         dir_vec = np.cos(theta) * u1 + np.sin(theta) * u2
+#         btm_v = start + dir_vec * radius
+#         top_v = cone_base + dir_vec * radius
+#         vertices.extend([btm_v, top_v])
+
+#     for i in range(circle_resolution):
+#         b1 = i * 2
+#         t1 = i * 2 + 1
+#         b2 = ((i + 1) % circle_resolution) * 2
+#         t2 = ((i + 1) % circle_resolution) * 2 + 1
+#         faces.append([b1, b2, t2])
+#         faces.append([b1, t2, t1])
+
+#     # 箭头
+#     cone_base_idx = len(vertices)
+#     for i in range(circle_resolution):
+#         theta = 2 * np.pi * i / circle_resolution
+#         dir_vec = np.cos(theta) * u1 + np.sin(theta) * u2
+#         vertices.append(cone_base + dir_vec * radius * 2)
+#     tip_idx = len(vertices)
+#     vertices.append(end)
+#     for i in range(circle_resolution):
+#         b1 = cone_base_idx + i
+#         b2 = cone_base_idx + (i + 1) % circle_resolution
+#         faces.append([b1, b2, tip_idx])
+
+#     # 写 OBJ
+#     with open(axis_file, "w") as f:
+#         for v in vertices:
+#             f.write(f"v {v[0]} {v[1]} {v[2]} 1.0 0.0 0.0\n")
+#         for face in faces:
+#             f.write(f"f {face[0]+1} {face[1]+1} {face[2]+1}\n")
+
+# def save_pointcloud(xyz, filename):
+#     """保存为 .ply 点云文件"""
+#     xyz = xyz.detach().cpu().numpy()
+#     with open(filename, 'w') as f:
+#         f.write("ply\n")
+#         f.write("format ascii 1.0\n")
+#         f.write(f"element vertex {xyz.shape[0]}\n")
+#         f.write("property float x\n")
+#         f.write("property float y\n")
+#         f.write("property float z\n")
+#         f.write("end_header\n")
+#         for p in xyz:
+#             f.write(f"{p[0]} {p[1]} {p[2]}\n")

@@ -165,7 +165,7 @@ def training(config):
     first_iter += 1
     # tracemalloc.start()
     for iteration in range(first_iter, opt.iterations + 1):
-        if iteration == 30002:
+        if iteration == 25002:
             break
 
         if config.rigid_iter > 0 and iteration == config.rigid_iter+1:
@@ -386,7 +386,7 @@ def training(config):
             loss_mask += F.l1_loss(obj_opacity, obj_mask)
             loss_mask += F.l1_loss(full_opacity, full_mask)
             #if iteration>=0 and iteration<=10000:
-            if iteration<=dataset.get('until_sam2', 30000):
+            if config.rigid_iter > 0 and iteration<=dataset.get('until_sam2', 30000):
                 lambda_sam2 = dataset.get('until_sam2', 1)
                 loss_mask += lambda_sam2*F.l1_loss(opacity_static, mask_static)
                 loss_mask += lambda_sam2*F.l1_loss(opacity_dynamic, mask_dynamic)
@@ -467,9 +467,7 @@ def training(config):
 
             # Log and save
             validation(iteration, testing_iterations, testing_interval, (iteration <= config.rigid_iter), scene, evaluator, (pipe, background))
-            if (iteration in saving_iterations):
-                print("\n[ITER {}] Saving Gaussians".format(iteration))
-                scene.save(iteration)
+            
 
             # Densification
             if iteration < opt.densify_until_iter:
@@ -689,7 +687,7 @@ def main(config):
     enable_swanlab = not getattr(config, "wandb_disable", False)
 
     #swanlab_log = os.path.join('/mnt/sda2/lxy/ARGS_results/', config.dataset._YCB_CLASSES[0],'swanlab')
-    swanlab_log = os.path.join('/mnt/sda2/lxy/ARGS_results/', 'swanlab', 'detach')
+    swanlab_log = os.path.join('/mnt/sda2/lxy/ARGS_results/', 'swanlab', 'stone')
     os.makedirs(swanlab_log, exist_ok=True) 
     swanlab.init(
         name=wandb_name,

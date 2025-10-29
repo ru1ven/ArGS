@@ -22,6 +22,7 @@ from utils.sh_utils import RGB2SH
 from simple_knn._C import distCUDA2
 from utils.graphics_utils import BasicPointCloud
 from utils.general_utils import strip_symmetric, build_scaling_rotation
+from scipy.spatial.transform import Rotation
 
 import trimesh
 import igl
@@ -430,7 +431,7 @@ class GaussianModel:
         for i in range(self._rotation.shape[1]):
             l.append('rot_{}'.format(i))
         return l
-
+    
     def save_ply(self, path, save_dynamic=True, clean=False):
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
@@ -442,7 +443,14 @@ class GaussianModel:
         if save_dynamic:
             dynamic = self._dynamic.detach().cpu().numpy()
         scale = self._scaling.detach().cpu().numpy()
-        rotation = self._rotation.detach().cpu().numpy()
+        
+        if hasattr(self, 'rotation_precomp'):
+            rotation = Rotation.from_matrix(self.rotation_precomp.detach().cpu().numpy())
+            quaternion = rotation.as_quat()  # 四元数形式 (x, y, z, w)
+            # 转换四元数顺序: (x, y, z, w) -> (w, x, y, z)
+            rotation = np.array([q[[3, 0, 1, 2]] for q in quaternion])
+        else:
+            rotation = self._rotation.detach().cpu().numpy()
 
         if clean:
             # ---- Step 1: 过滤低透明度点 ----
@@ -473,7 +481,7 @@ class GaussianModel:
         PlyData([el]).write(path)
 
    
-    def save_parted_ply(self, path, clean=False):
+    def save_parted_ply(self, path, clean=True):
         os.makedirs(path, exist_ok=True)
 
             # ---- 数据提取 ----
@@ -486,6 +494,7 @@ class GaussianModel:
         dynamic = self._dynamic.detach().cpu().numpy()
         scale = self._scaling.detach().cpu().numpy()
         rotation = self._rotation.detach().cpu().numpy()
+        # conv = self.get_covariance().detach().cpu().numpy()
 
         dtype_full = [(attribute, 'f4') for attribute in self.construct_list_of_attributes(True)]
         if clean:

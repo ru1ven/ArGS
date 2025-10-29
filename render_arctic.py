@@ -68,15 +68,7 @@ def C(iteration, value):
 def training(config):
     model = config.model
     dataset = config.dataset
-    opt = config.opt
     pipe = config.pipeline
-    testing_iterations = config.test_iterations
-    testing_interval = config.test_interval
-    saving_iterations = config.save_iterations
-    checkpoint_iterations = config.checkpoint_iterations
-    #checkpoint = config.start_checkpoint
-    debug_from = config.debug_from
-    # generate obj_id and subject_id
     gaussians_hand_group = {}
     gaussians_obj_group = {}
 
@@ -86,17 +78,6 @@ def training(config):
     for subject in dataset._SUBJECTS:
         gaussians_hand_group[subject] = {'right':None, 'left':None,}
 
-
-    # define lpips
-    lpips_type = config.opt.get('lpips_type', 'alex')
-    #loss_fn_vgg = lpips.LPIPS(net=lpips_type).cuda()  # for training
-    # loss_fn_vgg_h = lpips.LPIPS(net=lpips_type).cuda()  # for training
-    # loss_fn_vgg_o = lpips.LPIPS(net=lpips_type).cuda()  # for training
-    loss_fn_vgg = pyiqa.create_metric('lpips', device='cuda', as_loss=True)
-    # loss_fn_vgg_h = pyiqa.create_metric('lpips-vgg', device='cuda', as_loss=True)
-    # loss_fn_vgg_o = pyiqa.create_metric('lpips-vgg', device='cuda', as_loss=True)
-    # evaluator = PSEvaluator() if dataset.name == 'people_snapshot' else Evaluator()
-    evaluator = PSEvaluator()
 
     for sub_id in gaussians_hand_group:
         gaussians_hand_group[sub_id]['right'] = GaussianModel(model.gaussian)
@@ -110,28 +91,20 @@ def training(config):
     print("training_samples:", len(scene.train_dataset))
 
     load_ckpt = config.checkpoint
+    if load_ckpt is None:
+        load_ckpt = os.path.join(config.exp_dir, 'ckpt25000.pth')
     print(load_ckpt)
     scene.load_checkpoint(load_ckpt)
 
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
-    iter_start = torch.cuda.Event(enable_timing=True)
-    iter_end = torch.cuda.Event(enable_timing=True)
-
-    data_stack = None
-    ema_loss_for_log = 0.0
-    first_iter = 0
-   
-    first_iter += 1
-  
-    validation(25001, testing_iterations, testing_interval, (25001 <= config.rigid_iter), scene, evaluator, (pipe, background))
-            
+    validation(25001, (25001 <= config.rigid_iter), scene, (pipe, background))
+        
 
 
 
-
-def validation(iteration, testing_iterations, testing_interval, rigid_delay, scene: Scene, evaluator, renderArgs):
+def validation(iteration, rigid_delay, scene: Scene, renderArgs):
     scene.eval()
     torch.cuda.empty_cache()
 
@@ -177,106 +150,50 @@ def validation(iteration, testing_iterations, testing_interval, rigid_delay, sce
                         cv2.cvtColor(np.uint8(full_gt_image_novel.permute(1, 2, 0).detach().cpu().numpy() * 255),
                                      cv2.COLOR_BGR2RGB))
 
-
-            # wandb_img = swanlab.Image(tensor_to_numpy_image(full_image),
-            #                         caption="render_view_{}".format(data.image_name), size=500)
-            # examples.append(wandb_img)
-            # wandb_img = swanlab.Image(tensor_to_numpy_image(full_gt_image),
-            #                         caption="GT_view_{}".format(
-            #                             data.image_name), size=500)
-            # examples.append(wandb_img)
-            # wandb_img = swanlab.Image(tensor_to_numpy_image(full_image_novel),
-            #                           caption= "render_novel_{}".format(data.image_name), size=500)
-            # examples.append(wandb_img)
-            # wandb_img = swanlab.Image(tensor_to_numpy_image(full_gt_image_novel),
-            #                           caption="GT_novel_{}".format(
-            #                               data.image_name), size=500)
-
-            # examples.append(wandb_img)
-
-            # swanlab.log({'test'+ "_{}".format(iteration): examples})
-            # examples.clear()
-
-
-        # metrics = evaluator(full_image, full_gt_image)
-
-        # psnr_train += metrics['psnr']
-        # ssim_train += metrics['ssim']
-        # lpips_train += metrics['lpips']
         updated_camera = render_pkg['updated_camera']
-
-        # swanlab.log({
-        #     'test' + '/psnr': metrics['psnr'],
-        #     'test' + '/ssim': metrics['ssim'],
-        #     'test' + '/lpips': metrics['lpips'],
-        # })
-
-        # metrics_novel = evaluator(full_image_novel, full_gt_image_novel)
-
-        # psnr_test += metrics_novel['psnr']
-        # ssim_test += metrics_novel['ssim']
-        # lpips_test += metrics_novel['lpips']
-
-        # swanlab.log({
-        #     'test' + '/novel_psnr': metrics_novel['psnr'],
-        #     'test' + '/novel_ssim': metrics_novel['ssim'],
-        #     'test' + '/novel_lpips': metrics_novel['lpips'],
-        # })
-
-        # save model
-        scene.gaussians_obj_group[list(scene.gaussians_obj_group.keys())[0]].save_ply(
-                        os.path.join(vis_dir, 'canonicalGS','iteration_{}'.format(idx),'point_cloud.ply'))
-        
-        render_pkg['obj_deformed_gaussian'].save_ply(
-                        os.path.join(vis_dir, 'partedGS','iteration_{}'.format(idx),'point_cloud.ply'))
-        os.makedirs(os.path.join(vis_dir,'articulation','iteration_{}'.format(idx)), exist_ok=True)
-        np.save(os.path.join(vis_dir,'articulation','iteration_{}'.format(idx),"pivot.npy"), pivot.detach().cpu().numpy())
-        np.save(os.path.join(vis_dir,'articulation','iteration_{}'.format(idx),"axis.npy"), axis.detach().cpu().numpy())
-
-        save_axis(render_pkg['obj_deformed_gaussian']._xyz.detach().cpu().numpy(), pivot.detach().cpu().numpy(), 
-                  axis.detach().cpu().numpy(), os.path.join(vis_dir,'articulation','iteration_{}'.format(idx)))
-        render_pkg['pc_articulated'].save_ply(
-                        os.path.join(vis_dir, 'articulation','iteration_{}'.format(idx),'point_cloud.ply'))
-        render_pkg['pc_articulated'].save_parted_ply(
-                        os.path.join(vis_dir, 'articulation','iteration_{}'.format(idx)))
-        
-
-        # save articulation
-        # if idx % 10 == 0:
-        #     try:
-        #         delta_norm = save_deltas(getattr(scene.converter, 'deformer_obj_{}'.format(
-        #             list(scene.gaussians_obj_group.keys())[0])).non_rigid.delta_history,
-        #                                 xyz=scene.gaussians_obj_group[
-        #                                     list(scene.gaussians_obj_group.keys())[0]].get_xyz.detach().cpu().numpy(),
-        #                                 filename=os.path.join(vis_dir, 'movable','iteration_{}'.format(idx),'delta_nr_pcl.obj'))
-        #     except Exception as e:
-        #         print(f"[Warning] Failed to save deltas: {e}")
-        #         delta_norm = None
-
-        
+       
         pc_obj = render_pkg['obj_deformed_gaussian']
         coord_min = torch.min(pc_obj._xyz.detach(), dim=0).values
         coord_max = torch.max(pc_obj._xyz.detach(), dim=0).values
 
         # 如果你希望使原点为中心（例如，将点云的中心移到原点），可以通过以下方式计算中心偏移量
         center = (coord_min + coord_max) / 2
-
         # 将点云的坐标移动到原点
         pc_obj._xyz -= center
-
-        # 更新后的最小值和最大值
         coord_min -= center
-        coord_max -= center
-        # pc_obj._xyz -= updated_camera.obj_trans.detach()        
+        coord_max -= center  
         pc_obj.save_ply(os.path.join(vis_dir, 'point_cloud','iteration_{}'.format(idx),'point_cloud.ply'), save_dynamic=False)
+
+        if iter in []:
+            pc_obj = scene.gaussians_obj_group[list(scene.gaussians_obj_group.keys())[0]]
+            coord_min = torch.min(pc_obj._xyz.detach(), dim=0).values
+            coord_max = torch.max(pc_obj._xyz.detach(), dim=0).values
+
+            # 如果你希望使原点为中心（例如，将点云的中心移到原点），可以通过以下方式计算中心偏移量
+            center = (coord_min + coord_max) / 2
+            # 将点云的坐标移动到原点
+            pc_obj._xyz -= center
+            coord_min -= center
+            coord_max -= center  
+            pc_obj.save_ply(os.path.join(vis_dir, 'canonicalGS','iteration_{}'.format(idx),'point_cloud.ply'))
+
+        if not rigid_delay:
+        
+            save_axis(render_pkg['obj_deformed_gaussian']._xyz.detach().cpu().numpy(), pivot.detach().cpu().numpy(), 
+                    axis.detach().cpu().numpy(), os.path.join(vis_dir,'articulation','iteration_{}'.format(idx)))
+            # render_pkg['pc_articulated'].save_ply(
+            #                 os.path.join(vis_dir, 'articulation','iteration_{}'.format(idx),'point_cloud.ply'))
+            render_pkg['pc_articulated'].save_parted_ply(
+                            os.path.join(vis_dir, 'articulation','iteration_{}'.format(idx)))
+            
+            np.save(os.path.join(vis_dir,'articulation','iteration_{}'.format(idx),"pivot.npy"), pivot.detach().cpu().numpy())
+            np.save(os.path.join(vis_dir,'articulation','iteration_{}'.format(idx),"axis.npy"), axis.detach().cpu().numpy())
+
+
 
         # generate camera
         if idx == 0:
-            # save_path = os.path.join(vis_dir, 'point_cloud')
-            # os.makedirs(save_path, exist_ok=True)
-            # aabb = scene.metadata_obj[list(scene.gaussians_obj_group.keys())[0]]['obj_aabb']
-            # coord_min = aabb.coord_min
-            # coord_max = aabb.coord_max
+            
             print(coord_min)
             print(coord_max)
             cams = QueryCamerasLoader(coord_min, coord_max, cam_num=512).get_cam
@@ -302,21 +219,7 @@ def validation(iteration, testing_iterations, testing_interval, rigid_delay, sce
     lpips_train /= len(scene.train_dataset)
 
     print("\n[ITER {}] Evaluating {}: lpips {} PSNR {} SSIM {}".format(iteration, 'test', lpips_test, psnr_test, ssim_test))
-    # swanlab.log({
-
-    #     'test' + '/loss_viewpoint - psnr': psnr_train,
-    #     'test' + '/loss_viewpoint - ssim': ssim_train,
-    #     'test' + '/loss_viewpoint - lpips': lpips_train,
-
-    #     'test' + '/novel - psnr': psnr_test,
-    #     'test' + '/novel - ssim': ssim_test,
-    #     'test' + '/novel - lpips': lpips_test,
-
-    # })
-    # swanlab.log({'p_num_r': scene.gaussians_hand_group[list(scene.gaussians_hand_group.keys())[0]]['right'].get_xyz.shape[0]})
-    # swanlab.log({'p_num_l': scene.gaussians_hand_group[list(scene.gaussians_hand_group.keys())[0]]['left'].get_xyz.shape[0]})
-    # swanlab.log(
-    #     {'p_num_obj': scene.gaussians_obj_group[list(scene.gaussians_obj_group.keys())[0]].get_xyz.shape[0]})
+   
     torch.cuda.empty_cache()
 
     scene.train()
@@ -345,22 +248,6 @@ def main(config):
             shutil.copytree('./utils', config.exp_dir + '/code/utils')
         except Exception as e:
             print(f"[Warning] Failed to save codes: {e}")
-
-
-
-    wandb_name = config.name
-    enable_swanlab = not getattr(config, "wandb_disable", False)
-
-   
-    swanlab_log = os.path.join('/mnt/sda2/lxy/ARGS_results/', 'swanlab', 'detach')
-    # os.makedirs(swanlab_log, exist_ok=True) 
-    # swanlab.init(
-    #     name=wandb_name,
-    #     project='ARGS_1001',
-    #     config=OmegaConf.to_container(config, resolve=True),
-    #     logdir=swanlab_log,
-    #     mode='local' if enable_swanlab else 'disabled'
-    # )
 
 
     print("Optimizing " + config.exp_dir)
