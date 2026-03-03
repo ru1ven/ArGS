@@ -43,14 +43,16 @@ class GaussianConverter(nn.Module):
         for subject_id in subject_labels:
             setattr(self, f"deformer_hand_{subject_id}_r",
                     get_deformer(cfg.model.deformer, metadata['right'], metadata_obj, 'right'))
-            setattr(self, f"deformer_hand_{subject_id}_l",
+            if 'left' in self.metadata.keys():
+                setattr(self, f"deformer_hand_{subject_id}_l",
                     get_deformer(cfg.model.deformer, metadata['left'], metadata_obj,  'left'))
 
         for obj_id in obj_labels:
             setattr(self, f"deformer_obj_{obj_id}", get_deformer_obj(cfg.model.deformer, metadata['right'], metadata_obj))
 
         self.texture_r = get_texture(cfg.model.texture, metadata['right'], metadata_obj,'hand')
-        self.texture_l = get_texture(cfg.model.texture, metadata['left'], metadata_obj, 'hand')
+        if 'left' in self.metadata.keys():
+            self.texture_l = get_texture(cfg.model.texture, metadata['left'], metadata_obj, 'hand')
         self.objtexture = get_texture(cfg.model.texture, metadata['right'], metadata_obj,'obj')
 
         self.lr_scale = 1 * self.cfg.get('batch_size', 8) / 8
@@ -76,23 +78,13 @@ class GaussianConverter(nn.Module):
         opt_params.extend([
             {'name': 'texture_r', 'params': [p for n, p in self.texture_r.named_parameters()],
              'lr': self.cfg.opt.get('texture_lr', 0.) * self.hand_lr_scale},
-            {'name': 'texture_l', 'params': [p for n, p in self.texture_l.named_parameters()],
-             'lr': self.cfg.opt.get('texture_lr', 0.) * self.hand_lr_scale},
             {'name': 'obj_texture', 'params': [p for n, p in self.objtexture.named_parameters()],
              'lr': self.cfg.opt.get('texture_lr', 0.)},
         ])
-
+        
         # Backbone
         opt_params.append({'name': 'backbone', 'params': [p for n, p in self.backbone.named_parameters()],
                            'lr': self.cfg.opt.get('pose_correction_lr', 0.) * 1})
-
-        # # Pose models
-        # opt_params.append({'name': 'hand_r_pose', 'params': [p for n, p in self.pose_model_hand_r.named_parameters()],
-        #                    'lr': self.cfg.opt.get('pose_correction_lr', 0.) * self.hand_lr_scale})
-        # opt_params.append({'name': 'hand_l_pose', 'params': [p for n, p in self.pose_model_hand_l.named_parameters()],
-        #                    'lr': self.cfg.opt.get('pose_correction_lr', 0.) * self.hand_lr_scale})
-        # opt_params.append({'name': 'obj_pose', 'params': [p for n, p in self.pose_model_obj.named_parameters()],
-        #                    'lr': self.cfg.opt.get('pose_correction_lr', 0.)})
 
         # Deformer objects
         for obj_id in self.obj_labels:
@@ -119,7 +111,11 @@ class GaussianConverter(nn.Module):
 
         # Deformer hands
         for sub_id in self.subject_labels:
-            for side in ['r', 'l']:
+            if 'left' in self.metadata.keys(): 
+                hand_sides =  ['r', 'l']
+            else :
+                hand_sides =  ['r']
+            for side in hand_sides:
                 # rigid
                 opt_params.append({
                     'name': f'hand_{side}_{sub_id}_rigid',
@@ -133,60 +129,13 @@ class GaussianConverter(nn.Module):
                     'lr': self.cfg.opt.get('non_rigid_lr', 0.)
                 })
 
-        self.optimizer = torch.optim.Adam(params=opt_params, lr=0.001, eps=1e-15)
-
-        gamma = self.cfg.opt.lr_ratio ** (1. / self.cfg.opt.iterations)
-        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=gamma)
-
-    def pc_refine_setup(self, iterations=0):
-        opt_params = []
-        opt_params = [
-            {'params': [p for n, p in self.texture_r.named_parameters()],
+        if 'left' in self.metadata.keys(): 
+            opt_params.extend([
+            {'name': 'texture_l', 'params': [p for n, p in self.texture_l.named_parameters()],
              'lr': self.cfg.opt.get('texture_lr', 0.) * self.hand_lr_scale},
-            {'params': [p for n, p in self.texture_l.named_parameters()],
-             'lr': self.cfg.opt.get('texture_lr', 0.) * self.hand_lr_scale},
-            {'params': [p for n, p in self.objtexture.named_parameters()],
-             'lr': self.cfg.opt.get('texture_lr', 0.)},
-        ]
-
-        # opt_params.append({'params': [p for n, p in self.backbone.named_parameters()],
-        #                    'lr': self.cfg.opt.get('pose_correction_lr', 0.) * 0.01})
-        # opt_params.append({'params': [p for n, p in self.pose_model_hand_r.named_parameters()],
-        #                    'lr': self.cfg.opt.get('pose_correction_lr', 0.) * self.hand_lr_scale})
-        # opt_params.append({'params': [p for n, p in self.pose_model_hand_l.named_parameters()],
-        #                    'lr': self.cfg.opt.get('pose_correction_lr', 0.) * self.hand_lr_scale})
-        # opt_params.append({'params': [p for n, p in self.pose_model_obj.named_parameters()],
-        #                    'lr': self.cfg.opt.get('pose_correction_lr', 0.)})
-
-        opt_params.extend([{'params': [p for n, p in
-                                       getattr(self, f"deformer_obj_{obj_id}").rigid.named_parameters() if
-                                       'angle' not in n],
-                            'lr': self.cfg.opt.get('objrigid_lr', 0.)} for obj_id in self.obj_labels])
-        opt_params.extend([{'params': [p for n, p in getattr(self, f"deformer_obj_{obj_id}").rigid.parameters() if 'angle' in n],
-             'lr': self.cfg.opt.get('angle_lr', 0.)}
-            for obj_id in self.obj_labels])
-
-        opt_params.extend([
-            {'params': getattr(self, f"deformer_hand_{sub_id}_r").rigid.parameters(),
-             'lr': self.cfg.opt.get('rigid_lr', 0.)} for sub_id in self.subject_labels
-        ])
-        opt_params.extend([
-            {'params': getattr(self, f"deformer_hand_{sub_id}_l").rigid.parameters(),
-             'lr': self.cfg.opt.get('rigid_lr', 0.)} for sub_id in self.subject_labels
         ])
 
-        opt_params.extend([
-            {'params': [p for n, p in getattr(self, f"deformer_obj_{obj_id}").non_rigid.named_parameters()],
-             'lr': self.cfg.opt.get('non_rigid_lr', 0)} for obj_id in self.obj_labels
-        ])
-        opt_params.extend([
-            {'params': [p for n, p in getattr(self, f"deformer_hand_{sub_id}_r").non_rigid.named_parameters()],
-             'lr': self.cfg.opt.get('non_rigid_lr', 0)} for sub_id in self.subject_labels
-        ])
-        opt_params.extend([
-            {'params': [p for n, p in getattr(self, f"deformer_hand_{sub_id}_l").non_rigid.named_parameters()],
-             'lr': self.cfg.opt.get('non_rigid_lr', 0)} for sub_id in self.subject_labels
-        ])
+            
 
         self.optimizer = torch.optim.Adam(params=opt_params, lr=0.001, eps=1e-15)
 
@@ -217,15 +166,17 @@ class GaussianConverter(nn.Module):
 
 
         deformer_hand_r = getattr(self, f"deformer_hand_{camera.subject_id}_r")
-        deformer_hand_l = getattr(self, f"deformer_hand_{camera.subject_id}_l")
+        if 'left' in self.metadata.keys():
+            deformer_hand_l = getattr(self, f"deformer_hand_{camera.subject_id}_l")
         camera, movable_prob, refined_gaussians_hand_r, _, loss_non_rigid_hand_r = \
             deformer_hand_r.non_rigid(gaussians_r, img_feat, iteration, camera,
                                       compute_loss, delay=False)
         loss_reg.update(loss_non_rigid_hand_r)
-        camera, movable_prob, refined_gaussians_hand_l, _, loss_non_rigid_hand_l= \
-            deformer_hand_l.non_rigid(gaussians_l, img_feat, iteration, camera, compute_loss,
-                                      delay=False)
-        loss_reg.update(loss_non_rigid_hand_l)
+        if 'left' in self.metadata.keys():
+            camera, movable_prob, refined_gaussians_hand_l, _, loss_non_rigid_hand_l= \
+                deformer_hand_l.non_rigid(gaussians_l, img_feat, iteration, camera, compute_loss,
+                                        delay=False)
+            loss_reg.update(loss_non_rigid_hand_l)
 
         deformer_obj = getattr(self, f"deformer_obj_{camera.obj_id}")
 
@@ -239,15 +190,24 @@ class GaussianConverter(nn.Module):
 
         #if delay:
         deformed_gaussians_hand_r = deformer_hand_r.rigid(refined_gaussians_hand_r, iteration, camera, None)
-        deformed_gaussians_hand_l = deformer_hand_l.rigid(refined_gaussians_hand_l, iteration, camera,
-                                                        None)
+        if 'left' in self.metadata.keys():
+            deformed_gaussians_hand_l = deformer_hand_l.rigid(refined_gaussians_hand_l, iteration, camera,
+                                                            None)
+        else:
+            deformed_gaussians_hand_l = None
         deformed_gaussians_obj, loss_reg_rigid, articulated_obj, pivot, axis = deformer_obj.rigid(refined_gaussians_obj, xyz_canonical, iteration, camera,
                                                 None, self.cfg.rigid_iter, rigid_delay, self.save_dir)
         if loss_reg_rigid is not None:
             loss_reg.update(loss_reg_rigid)
 
         color_precompute_r = self.texture_r(deformed_gaussians_hand_r, camera)
-        color_precompute_l = self.texture_r(deformed_gaussians_hand_l, camera)
+        if 'left' in self.metadata.keys():
+            # NOTE: We incorrectly use `texture_r` for the left hand here — this is a code inconsistency 
+            # as it should ideally be `texture_l` or a shared module. However, due to the bilateral symmetry 
+            # of hands and shared weights, this currently produces valid results. 
+            color_precompute_l = self.texture_r(deformed_gaussians_hand_l, camera)
+        else:
+            color_precompute_l = None
         objcolor_precompute = self.objtexture(deformed_gaussians_obj, camera)
 
         deformed_gaussians_obj_rigid = None

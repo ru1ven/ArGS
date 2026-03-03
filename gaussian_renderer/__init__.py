@@ -45,21 +45,24 @@ def render(data,
         data = updated_camera
     if iteration <= 4 or iteration % 1001 == 0:
         pc_hand_r.save_ply('output/output_{}_r.ply'.format(iteration))
-        pc_hand_l.save_ply('output/output_{}_l.ply'.format(iteration))
+        #pc_hand_l.save_ply('output/output_{}_l.ply'.format(iteration))
         pc_obj.save_ply('output/output_obj_{}.ply'.format(iteration))
     if save:
         pc_hand_r.save_ply('/home/cyc/pycharm/lxy/3DGS/debug/pcl/pcl_r_{}_noise_0.ply'.format(int(data.subject_id)))
-        pc_hand_l.save_ply('/home/cyc/pycharm/lxy/3DGS/debug/pcl/pcl_l_{}_noise_0.ply'.format(int(data.subject_id)))
+        #pc_hand_l.save_ply('/home/cyc/pycharm/lxy/3DGS/debug/pcl/pcl_l_{}_noise_0.ply'.format(int(data.subject_id)))
         pc_obj.save_ply('/home/cyc/pycharm/lxy/3DGS/debug/pcl/pcl_obj_{}_noise_0.ply'.format(int(data.subject_id)))
         print('save')
     # Create zero tensor. We will use it to make pytorch return gradients of the 2D (screen-space) means
     screenspace_points_hand_r = torch.zeros_like(pc_hand_r.get_xyz, dtype=pc_hand_r.get_xyz.dtype, requires_grad=True, device="cuda") + 0
-    screenspace_points_hand_l = torch.zeros_like(pc_hand_l.get_xyz, dtype=pc_hand_l.get_xyz.dtype, requires_grad=True,
+    screenspace_points_hand_l = None
+    if pc_hand_l is not None:
+        screenspace_points_hand_l = torch.zeros_like(pc_hand_l.get_xyz, dtype=pc_hand_l.get_xyz.dtype, requires_grad=True,
                                                device="cuda") + 0
     screenspace_points_obj = torch.zeros_like(pc_obj.get_xyz, dtype=pc_obj.get_xyz.dtype, requires_grad=True, device="cuda") + 0
     try:
         screenspace_points_hand_r.retain_grad()
-        screenspace_points_hand_l.retain_grad()
+        if pc_hand_l is not None:
+            screenspace_points_hand_l.retain_grad()
         screenspace_points_obj.retain_grad()
     except:
         pass
@@ -67,10 +70,6 @@ def render(data,
     # Set up rasterization configuration
     tanfovx = math.tan(data.FoVx * 0.5)
     tanfovy = math.tan(data.FoVy * 0.5)
-
-    kernel_size = 0.0
-    subpixel_offset = torch.zeros((int(data.image_height), int(data.image_width), 2),
-                                  dtype=torch.float32, device="cuda")
 
     raster_settings = GaussianRasterizationSettings(
         image_height=int(data.image_height),
@@ -92,43 +91,59 @@ def render(data,
     rasterizer = GaussianRasterizer(raster_settings=raster_settings)
 
     means3D_r = pc_hand_r.get_xyz
-    #print('means3D_r',means3D_r)
     npt_hand_r = means3D_r.shape[0]
-    means3D_l = pc_hand_l.get_xyz
-    npt_hand_l = means3D_l.shape[0]
     obj_means3D = pc_obj.get_xyz
-    #print('obj_means3D', obj_means3D)
+    if pc_hand_l is not None:
+        means3D_l = pc_hand_l.get_xyz
+        npt_hand_l = means3D_l.shape[0]
+        means2D = torch.cat([screenspace_points_hand_r, screenspace_points_hand_l,screenspace_points_obj], dim=0)
+    else:
+        npt_hand_l = 0
+        means2D = torch.cat([screenspace_points_hand_r,screenspace_points_obj], dim=0)
 
-    means2D = torch.cat([screenspace_points_hand_r, screenspace_points_hand_l,screenspace_points_obj], dim=0)
-
-    # obj_means2D = obj_screenspace_point
     opacity_r = pc_hand_r.get_opacity
-    opacity_l = pc_hand_l.get_opacity
     obj_opacity = pc_obj.get_opacity
-
-    full_means3D = torch.cat([means3D_r, means3D_l,obj_means3D], dim=0)
-    full_opacity = torch.cat([opacity_r, opacity_l, obj_opacity], dim=0)
-
     scales = None
     rotations = None
     cov3D_precomp = None
-    if pipe.compute_cov3D_python:
-        cov3D_precomp = torch.cat([pc_hand_r.get_covariance(scaling_modifier),
-                                   pc_hand_l.get_covariance(scaling_modifier),
-                                   pc_obj.get_covariance(scaling_modifier)],dim=0)
-
-    else:
-        scales = torch.cat([pc_hand_r.get_scaling, pc_hand_l.get_scaling,pc_obj.get_scaling], dim=0)
-        rotations = torch.cat([pc_hand_r.get_rotation, pc_hand_l.get_rotation,pc_obj.get_rotation], dim=0)
-
     shs = None
 
-    # Rasterize visible Gaussians to image, obtain their radii (on screen).
-    if white_bg:
-        #print('white_bg')
-        colors_hand = torch.cat([colors_precomp_r,colors_precomp_l,torch.ones(obj_opacity.shape[0], 3, device=opacity_r.device)], dim=0)
+    if pc_hand_l is not None:
+        opacity_l = pc_hand_l.get_opacity
+        full_means3D = torch.cat([means3D_r, means3D_l,obj_means3D], dim=0)
+        full_opacity = torch.cat([opacity_r, opacity_l, obj_opacity], dim=0)
+        if pipe.compute_cov3D_python:
+            cov3D_precomp = torch.cat([pc_hand_r.get_covariance(scaling_modifier),
+                                   pc_hand_l.get_covariance(scaling_modifier),
+                                   pc_obj.get_covariance(scaling_modifier)],dim=0)
+        else:
+            scales = torch.cat([pc_hand_r.get_scaling, pc_hand_l.get_scaling,pc_obj.get_scaling], dim=0)
+            rotations = torch.cat([pc_hand_r.get_rotation, pc_hand_l.get_rotation,pc_obj.get_rotation], dim=0)
+            # Rasterize visible Gaussians to image, obtain their radii (on screen).
+        if white_bg:
+            colors_hand = torch.cat([colors_precomp_r,colors_precomp_l,torch.ones(obj_opacity.shape[0], 3, device=opacity_r.device)], dim=0)
+        else:
+            colors_hand = torch.cat([colors_precomp_r,colors_precomp_l,torch.zeros(obj_opacity.shape[0], 3, device=opacity_r.device)], dim=0)
+
     else:
-        colors_hand = torch.cat([colors_precomp_r,colors_precomp_l,torch.zeros(obj_opacity.shape[0], 3, device=opacity_r.device)], dim=0)
+        full_means3D = torch.cat([means3D_r,obj_means3D], dim=0)
+        full_opacity = torch.cat([opacity_r, obj_opacity], dim=0)
+
+    
+        if pipe.compute_cov3D_python:
+            cov3D_precomp = torch.cat([pc_hand_r.get_covariance(scaling_modifier),
+                                   pc_obj.get_covariance(scaling_modifier)],dim=0)
+        else:
+            scales = torch.cat([pc_hand_r.get_scaling, pc_obj.get_scaling], dim=0)
+            rotations = torch.cat([pc_hand_r.get_rotation, pc_obj.get_rotation], dim=0)
+
+   
+
+        # Rasterize visible Gaussians to image, obtain their radii (on screen).
+        if white_bg:
+            colors_hand = torch.cat([colors_precomp_r,torch.ones(obj_opacity.shape[0], 3, device=opacity_r.device)], dim=0)
+        else:
+            colors_hand = torch.cat([colors_precomp_r,torch.zeros(obj_opacity.shape[0], 3, device=opacity_r.device)], dim=0)
 
 
     rendered_image, radii = rasterizer(
@@ -140,14 +155,24 @@ def render(data,
         scales = scales,
         rotations = rotations,
         cov3D_precomp = cov3D_precomp)
-    if white_bg:
-        colors_obj = torch.cat([torch.ones(opacity_r.shape[0], 3, device=opacity_r.device),
-                                torch.ones(opacity_l.shape[0], 3, device=opacity_l.device),
-                                obj_colors_precomp], dim=0)
+    if pc_hand_l is not None:
+        if white_bg:
+            colors_obj = torch.cat([torch.ones(opacity_r.shape[0], 3, device=opacity_r.device),
+                                    torch.ones(opacity_l.shape[0], 3, device=opacity_l.device),
+                                    obj_colors_precomp], dim=0)
+        else:
+            colors_obj = torch.cat([torch.zeros(opacity_r.shape[0], 3, device=opacity_r.device),
+                                    torch.zeros(opacity_l.shape[0], 3, device=opacity_l.device),
+                                    obj_colors_precomp], dim=0)
+        color_full = torch.cat([colors_precomp_r,colors_precomp_l, obj_colors_precomp], dim=0)
     else:
-        colors_obj = torch.cat([torch.zeros(opacity_r.shape[0], 3, device=opacity_r.device),
-                                torch.zeros(opacity_l.shape[0], 3, device=opacity_l.device),
-                                obj_colors_precomp], dim=0)
+        if white_bg:
+            colors_obj = torch.cat([torch.ones(opacity_r.shape[0], 3, device=opacity_r.device),
+                                    obj_colors_precomp], dim=0)
+        else:
+            colors_obj = torch.cat([torch.zeros(opacity_r.shape[0], 3, device=opacity_r.device),
+                                    obj_colors_precomp], dim=0)
+        color_full = torch.cat([colors_precomp_r, obj_colors_precomp], dim=0)
 
 
     obj_rendered_image, obj_radii = rasterizer(
@@ -166,7 +191,7 @@ def render(data,
         opacities = full_opacity,
         scales = scales,
         rotations = rotations,
-        colors_precomp = torch.cat([colors_precomp_r,colors_precomp_l, obj_colors_precomp], dim=0),
+        colors_precomp = color_full,
         cov3D_precomp = cov3D_precomp
     )
 
@@ -194,9 +219,18 @@ def render(data,
                 debug=pipe.debug
             )
             rasterizer = GaussianRasterizer(raster_settings=opacity_raster_settings)
-        colors_opacity_hand = torch.cat([torch.ones(opacity_r.shape[0], 3, device=opacity_r.device),
+        if pc_hand_l is not None:
+            colors_opacity_hand = torch.cat([torch.ones(opacity_r.shape[0], 3, device=opacity_r.device),
                                          torch.ones(opacity_l.shape[0], 3, device=opacity_l.device),
                                          torch.zeros(obj_opacity.shape[0], 3, device=obj_opacity.device)], dim=0)
+            colors_opacity_obj = torch.cat([torch.zeros(opacity_r.shape[0], 3, device=opacity_r.device),
+                                        torch.zeros(opacity_l.shape[0], 3, device=opacity_l.device),
+                                        torch.ones(obj_opacity.shape[0], 3, device=obj_opacity.device)], dim=0)
+        else:
+            colors_opacity_hand = torch.cat([torch.ones(opacity_r.shape[0], 3, device=opacity_r.device),
+                                         torch.zeros(obj_opacity.shape[0], 3, device=obj_opacity.device)], dim=0)
+            colors_opacity_obj = torch.cat([torch.zeros(opacity_r.shape[0], 3, device=opacity_r.device),
+                                        torch.ones(obj_opacity.shape[0], 3, device=obj_opacity.device)], dim=0)
         opacity_hand, _ = rasterizer(
             means3D=full_means3D,
             means2D=means2D,
@@ -208,9 +242,7 @@ def render(data,
             cov3D_precomp=cov3D_precomp)
         opacity_hand = opacity_hand[:1]
 
-        colors_opacity_obj = torch.cat([torch.zeros(opacity_r.shape[0], 3, device=opacity_r.device),
-                                        torch.zeros(opacity_l.shape[0], 3, device=opacity_l.device),
-                                        torch.ones(obj_opacity.shape[0], 3, device=obj_opacity.device)], dim=0)
+       
         opacity_obj, _ = rasterizer(
             means3D=full_means3D,
             means2D=means2D,
@@ -235,8 +267,12 @@ def render(data,
 
         opacity_part = pc_obj.get_dynamic
         color_part = torch.cat([opacity_part, 1 - opacity_part, torch.zeros_like(opacity_part)], dim=-1)  # (n, 3)
-        colors_opacity_part = torch.cat([torch.zeros(opacity_r.shape[0], 3, device=opacity_r.device),
+        if pc_hand_l is not None:
+            colors_opacity_part = torch.cat([torch.zeros(opacity_r.shape[0], 3, device=opacity_r.device),
                                         torch.zeros(opacity_l.shape[0], 3, device=opacity_l.device),
+                                        color_part], dim=0)
+        else:
+            colors_opacity_part = torch.cat([torch.zeros(opacity_r.shape[0], 3, device=opacity_r.device),
                                         color_part], dim=0)
         opacity_part, _ = rasterizer(
             means3D=full_means3D,
@@ -275,7 +311,7 @@ def render(data,
                 opacities=full_opacity,
                 scales=scales,
                 rotations=rotations,
-                colors_precomp=torch.cat([colors_precomp_r, colors_precomp_l, obj_colors_precomp], dim=0),
+                colors_precomp=color_full,
                 cov3D_precomp=cov3D_precomp
             )
 

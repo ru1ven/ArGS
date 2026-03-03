@@ -1,41 +1,14 @@
 defaults:
   - _self_
-  #- dataset: arctic_waffleiron
-  #- dataset: arctic_box
-  - dataset: arctic_scissors
-
-  #- dataset: arctic_notebook
-  #- dataset: arctic_capsulemachine
-  #- dataset: arctic_mixer
-  #- dataset: arctic_laptop  
-
-  #- dataset: arctic_ketchup
-  #- dataset: arctic_phone
-  #- dataset: arctic_espressomachine
-  #- dataset: arctic_microwave 
+  - dataset: wild_box
 
   - texture: sh
-  #- texture: mlp
   - rigid: skinning_field
   - non_rigid: hashgrid
-  #- non_rigid: 3dgs_avatar
   - option:
     - iter_arctic_50k
 
-#checkpoint: null
-#checkpoint: /mnt/sda2/lxy/ARGS_results/waffleiron/_arctic_waffleiron-sam_.1_0_30k_nre3_detach/ckpt25000.pth
-#checkpoint: /mnt/sda2/lxy/ARGS_results/box/_arctic_box-sam_1._0_30k_nre3_detach/ckpt25000.pth
-checkpoint: /mnt/sda2/lxy/ARGS_results/scissors/_arctic_scissors-sam_.1_0_30k_nre3_detach/ckpt25000.pth
-
-#checkpoint: /mnt/sda2/lxy/ARGS_results/notebook/_arctic_notebook-sam_.1_0_30k_nre3_detach/ckpt25000.pth
-#checkpoint: /mnt/sda2/lxy/ARGS_results/capsulemachine/_arctic_capsulemachine-sam_.1_0_30k_nre3_detach/ckpt25000.pth
-#checkpoint: /mnt/sda2/lxy/ARGS_results/mixer/_arctic_mixer-sam_.1_0_30k_nre3_detach/ckpt25000.pth
-#checkpoint: /mnt/sda2/lxy/ARGS_results/laptop/arctic_laptop-sam_1._0_30k_nre3_detach/ckpt25000.pth
-
-#checkpoint: /mnt/sda2/lxy/ARGS_results/ketchup/arctic_ketchup-sam_1._0_30k_nre3_detach/ckpt25000.pth
-#checkpoint: /mnt/sda2/lxy/ARGS_results/phone/_arctic_phone-sam_.1_0_30k_nre3_detach/ckpt25000.pth
-#checkpoint: /mnt/sda2/lxy/ARGS_results/espressomachine/arctic_espressomachine-sam_1._0_30k_nre3_detach/ckpt25000.pth
-#checkpoint: /mnt/sda2/lxy/ARGS_results/microwave/_arctic_microwave-sam_1._0_30k_nre3_detach/ckpt25000.pth
+checkpoint: null
 
 
 test_iterations: [15000, 20000, 25000, 30000, 50000]
@@ -53,12 +26,7 @@ hydra:
 
 name: ${dataset_name}-${tag}
 
-tag: vis_ours
-#tag: NR+R
-#tag: clay
-#tag: stone
-#tag: 3dgs-avatar
-#tag: ARGS_dyxyzrs
+tag: wild
 
 rigid_iter: 10000
 

@@ -55,6 +55,143 @@ class NonRigidDeform(nn.Module):
         return refined_gaussians
 
 
+class Non_Rigid_3dgs_avatar(NonRigidDeform):
+    def __init__(self, cfg, metadata, metadata_obj, ho_type):
+        super().__init__(cfg)
+
+        d_cond = 0
+    
+        self.latent_dim = 64
+        self.frame_dict = metadata['frame_dict']
+        if self.latent_dim > 0:
+            d_cond += self.latent_dim
+            self.latent = nn.Embedding(len(self.frame_dict), self.latent_dim)
+
+        d_out = 3 + 3 + 4
+        self.feature_dim = cfg.get('feature_dim', 0)
+        d_out += self.feature_dim
+        self.ho_type = ho_type
+        self.metadata = metadata
+        self.metadata_obj = metadata_obj
+
+        self.hashgrid = HashGrid(cfg.hashgrid)
+        self.clip_fc = nn.Linear(768 * 2, d_cond)
+
+        # for a pre rigid trans
+        if ho_type != 'obj':
+            self.smpl_verts = torch.from_numpy(metadata["smpl_verts"]).float().cuda()
+            self.skinning_weights = torch.from_numpy(metadata["skinning_weights"]).float().cuda()
+        self.h, self.w = 1000, 1000
+        self.roi_size = cfg.get('roi_size', 224)
+
+        self.delta_mlp = VanillaCondMLP(self.hashgrid.n_output_dims, d_cond, d_out, cfg.mlp)
+
+        self.L2Loss = nn.SmoothL1Loss(reduction="mean").cuda()
+        self.delta_history = {}
+
+    def query_weights(self, xyz):
+        # find the nearest vertex
+        knn_ret = ops.knn_points(xyz.unsqueeze(0), self.smpl_verts.unsqueeze(0))
+        p_idx = knn_ret.idx.squeeze()
+        pts_W = self.skinning_weights[p_idx, :]
+
+        return pts_W
+
+    def get_jtr(self, body):
+        Jtrs = body['Jtr_a_pose']
+
+        v_shaped = body['v_shaped']
+        v_shaped = v_shaped.detach()
+        center = torch.mean(v_shaped, dim=1)
+        minimal_shape_centered = v_shaped - center
+        cano_max = minimal_shape_centered.max()
+        cano_min = minimal_shape_centered.min()
+        padding = (cano_max - cano_min) * 0.05
+
+        # compute pose condition
+        Jtrs = Jtrs - center
+        Jtrs = (Jtrs - cano_min + padding) / (cano_max - cano_min) / 1.1
+        Jtrs -= 0.5
+        Jtrs *= 2.
+        Jtrs = Jtrs.contiguous()
+        return Jtrs
+
+
+
+    def forward(self, gaussians, img_feature, iteration, camera, compute_loss=True, delay=False, prev_data=None):
+        loss_reg = {}
+
+        refined_gaussians = gaussians.clone()
+
+        setattr(refined_gaussians, "non_rigid_feature",
+                torch.zeros(gaussians.get_xyz.shape[0], self.feature_dim).cuda())
+        updated_camera = camera.copy()
+        
+        if self.ho_type in ['left', 'right']:
+            aabb = self.metadata['aabb'].cuda()
+        else:
+            aabb = self.metadata_obj[camera.obj_id]['obj_aabb'].cuda()
+
+        xyz = gaussians.get_xyz
+        xyz_norm = aabb.normalize(xyz, sym=True)
+        # deformed_gaussians = gaussians.clone()
+
+        pc_feature = self.hashgrid(xyz_norm).float()
+
+        frame_idx = camera.frame_id
+        latent_idx = self.frame_dict[frame_idx]
+        if self.latent_dim > 0:
+           
+            frame_idx = camera.frame_id
+            if frame_idx not in self.frame_dict:
+                latent_idx = len(self.frame_dict) - 1
+            else:
+                latent_idx = self.frame_dict[frame_idx]
+            latent_idx = torch.Tensor([latent_idx]).long().to(pc_feature.device)
+            latent_code = self.latent(latent_idx)
+            latent_code = latent_code.expand(pc_feature.shape[0], -1)
+            
+            deltas = self.delta_mlp(pc_feature, cond=latent_code)
+        else:
+            deltas = self.delta_mlp(pc_feature)
+
+        if self.ho_type == 'obj':
+            if not delay:
+                movable_prob = refined_gaussians.get_dynamic
+            else:
+                movable_prob = refined_gaussians.get_dynamic.detach()
+          
+        else:
+            movable_prob = None
+
+        delta_xyz = deltas[:, :3]
+        delta_scale = deltas[:, 3:6]
+        delta_rot = deltas[:, 6:10]
+        delta_rot = delta_rot[:, 1:]
+
+        if self.feature_dim > 0:
+            setattr(refined_gaussians, "non_rigid_feature", deltas[:, 10:])
+
+
+        canonical_gs = refined_gaussians.clone()
+
+        if not delay:
+            refined_gaussians = self.apply_non_rigid_trans(gaussians, refined_gaussians, deltas)
+
+        if compute_loss and self.ho_type == 'obj':
+           
+            loss_xyz = torch.norm(delta_xyz, p=2, dim=1).mean()
+            loss_scale = torch.norm(delta_scale, p=1, dim=1).mean()
+            loss_rot = torch.norm(delta_rot, p=1, dim=1).mean()
+            
+            loss_reg.update({
+                'nr_xyz_{}'.format(self.ho_type): loss_xyz,
+                'nr_scale_{}'.format(self.ho_type): loss_scale,
+                'nr_rot_{}'.format(self.ho_type): loss_rot,
+            })
+
+        return updated_camera, movable_prob, refined_gaussians, canonical_gs, loss_reg
+
 
 class Non_Rigid(NonRigidDeform):
     def __init__(self, cfg, metadata, metadata_obj, ho_type):
@@ -209,6 +346,7 @@ class Non_Rigid(NonRigidDeform):
             pose_feat = torch.cat([pose_feat, latent_code], dim=1)
 
         deltas = self.delta_mlp(pc_feature, cond=pose_feat)
+        #deltas_dy = self.delta_mlp(pc_feature, cond=pose_feat)
 
         if self.ho_type == 'obj':
             if not delay:
@@ -224,6 +362,22 @@ class Non_Rigid(NonRigidDeform):
         delta_scale = deltas[:, 3:6]
         delta_rot = deltas[:, 6:10]
         delta_rot = delta_rot[:, 1:]
+        # if self.ho_type == 'obj':
+        #     if not delay:
+        #         movable_prob = refined_gaussians.get_dynamic
+        #     else:
+        #         movable_prob = refined_gaussians.get_dynamic.detach()
+        #     deltas_dy = deltas_dy * movable_prob
+        #     delta_xyz = deltas_dy[:, :3]
+        #     delta_scale = deltas_dy[:, 3:6]
+        #     delta_rot = deltas_dy[:, 6:10]
+        #     delta_rot = delta_rot[:, 1:]
+            
+
+        # else:
+        #     movable_prob = None
+
+        
 
         if self.feature_dim > 0:
             setattr(refined_gaussians, "non_rigid_feature", deltas[:, 10:])
@@ -279,7 +433,7 @@ def get_non_rigid_deform(cfg, metadata, metadata_obj, type='hand'):
     name = cfg.name
     model_dict = {
 
-        #"3dgs_avatar": Non_Rigid_3dgs_avatar,
+        "3dgs_avatar": Non_Rigid_3dgs_avatar,
         "hashgrid": Non_Rigid,
         #"non_rigid_feat_ony": Non_Rigid,
         #"hashgrid": Non_Rigid_wo_visual

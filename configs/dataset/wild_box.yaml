@@ -1,0 +1,38 @@
+# @package _global_
+
+dataset_name: 'wild_box'
+
+
+dataset:
+  name: 'wild'
+  root_dir: "/mnt/sda2/lxy/dataset/hand/wild_articulated/box/"
+  refine: False
+  finetune: True
+  backbone: 'CLIP'
+  noise: False
+  anno_name: all
+  train_sample_rate : 1
+  val_sample_rate : 1
+  test_sample_rate : 1
+  predict_sample_rate : 1
+  split_train: '/mnt/sda2/lxy/dataset/hand/wild_articulated/box/wild_box.npy'
+  split_test: '/mnt/sda2/lxy/dataset/hand/wild_articulated/box/wild_box.npy'
+  speedup: True
+  ego_image_scale: 0.3
+
+  # until_sam2: 30000
+  # lambda_sam2: 1.
+
+  _SUBJECTS : [
+      's11',
+  ]
+  _YCB_CLASSES: [
+      'box',
+  ]
+
+  img_hw:
+    - 480
+    - 640
+
+white_background: false
+data_device: cuda

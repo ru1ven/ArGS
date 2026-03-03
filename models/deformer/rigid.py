@@ -602,12 +602,6 @@ class ObjRevoluteDeform(RigidDeform):
         pivot_scores = self.pivot_mlp(hash_feature)
         weights = F.softmax(pivot_scores.squeeze(-1), dim=0)  # (N,)
         pivot = torch.sum(weights[:, None] * student_xyz, dim=0)  # (3,)
-        #pivot_norm = torch.sum(weights[:, None] * xyz_norm, dim=0)  # (3,)
-        #pivot = self.aabb.unnormalize(pivot_norm, sym=True)
-
-        # pivot_norm 激活为[-1, 1]
-        # pivot_norm = torch.tanh(pivot_norm)
-        # pivot = self.aabb.unnormalize(pivot_norm, sym=True)
 
         axis = self.axis_mlp(hash_feature.mean(dim=0).unsqueeze(0)).squeeze(0)
         axis = axis / axis.norm(dim=-1, keepdim=True)
@@ -625,10 +619,6 @@ class ObjRevoluteDeform(RigidDeform):
         latent_code = self.latent_angle(latent_idx)
         latent_code = latent_code.expand(pc_feature.shape[0], -1)  # 扩展到 [B, M, C]
 
-        # angle_2d = self.angle_mlp(latent_code).squeeze(0)
-        # loss_norm = 0.1 * (angle_2d.pow(2).sum() - 1.0).pow(2)
-        # angle_2d = angle_2d / (angle_2d.norm() + 1e-8)  # 归一化
-        # angle = torch.atan2(angle_2d[0], angle_2d[1])  # 转弧度
 
         #逐帧
         angle_2d = self.angle_mlp(pc_feature, cond=latent_code).squeeze(0)
@@ -658,10 +648,10 @@ class ObjRevoluteDeform(RigidDeform):
         #loss_norm += loss_temporal
 
 
-        if iteration % 5 == 0:
-            print(angle)
-            print(axis)
-            print(pivot)
+        # if iteration % 5 == 0:
+        #     print(angle)
+        #     print(axis)
+        #     print(pivot)
         R = axis_angle_to_matrix(axis, angle)
 
         xyz_bar = (R @ (student_xyz - pivot).T).T + pivot

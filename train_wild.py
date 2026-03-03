@@ -113,7 +113,7 @@ def training(config):
     for obj_id in dataset._YCB_CLASSES:
         gaussians_obj_group[obj_id] = None
     for subject in dataset._SUBJECTS:
-        gaussians_hand_group[subject] = {'right':None, 'left':None,}
+        gaussians_hand_group[subject] = {'right':None}
 
 
     # define lpips
@@ -129,7 +129,6 @@ def training(config):
 
     for sub_id in gaussians_hand_group:
         gaussians_hand_group[sub_id]['right'] = GaussianModel(model.gaussian)
-        gaussians_hand_group[sub_id]['left'] = GaussianModel(model.gaussian)
     for obj_id in gaussians_obj_group:
         gaussians_obj_group[obj_id] = GaussianModel(model.gaussian)
 
@@ -140,7 +139,6 @@ def training(config):
 
     for sub_id in gaussians_hand_group:
         gaussians_hand_group[sub_id]['right'].training_setup(opt)
-        gaussians_hand_group[sub_id]['left'].training_setup(opt)
     for obj_id in gaussians_obj_group:
         gaussians_obj_group[obj_id].training_setup(opt)
 
@@ -181,30 +179,37 @@ def training(config):
 
         for sub_id in gaussians_hand_group:
             gaussians_hand_group[sub_id]['right'].update_learning_rate(iteration)
-            gaussians_hand_group[sub_id]['left'].update_learning_rate(iteration)
 
         for obj_id in gaussians_obj_group:
             gaussians_obj_group[obj_id].update_learning_rate(iteration)
-
-        # for obj_id in gaussians_obj_group:
-        #     gaussians_obj_group[obj_id].update_learning_rate(iteration-2000 if iteration >= config.rigid_iter+2000 else iteration)
-        # scene.converter.scheduler.last_epoch = iteration - 3000 if iteration >= config.rigid_iter+5000 else iteration
-
 
         # Every 1000 its we increase the levels of SH up to a maximum degree
         if iteration % (1000 * (len(gaussians_obj_group) + len(gaussians_hand_group) // 2)) == 0:
             for sub_id in gaussians_hand_group:
                 gaussians_hand_group[sub_id]['right'].oneupSHdegree()
-                gaussians_hand_group[sub_id]['left'].oneupSHdegree()
             for obj_id in gaussians_obj_group:
                 gaussians_obj_group[obj_id].oneupSHdegree()
         # Pick a random data point
         if not data_stack:
             data_stack = list(range(len(scene.train_dataset)))
-        data_idx = data_stack.pop(randint(0, len(data_stack) - 1))
-        #data_idx = data_stack.pop(0)
+        #data_idx = data_stack.pop(randint(0, len(data_stack) - 1))
+
+       # 自定义权重序列（长度 = 总帧数）
+        weights = [
+            2.0 if i <=25  or i>= 265  or i>=120 and i <=200 else           
+            #0.2  if i>=40 and i <=65 or i>=181 and i <=211 or i>=230 and i <=270  else           
+            1                              
+            for i in range(len(scene.train_dataset))
+        ]
+        probabilities = np.array(weights, dtype=float)
+        probabilities /= probabilities.sum()  # 归一化为概率分布
+
+        # === 只是随机选一个，不移除 ===
+        data_idx = np.random.choice(len(scene.train_dataset), p=probabilities)
+
+
+
         data = scene.train_dataset[data_idx]
-        #prev_data = scene.train_dataset[max(0, data_idx - 1)]
         prev_data = None
 
         # Render
@@ -234,7 +239,8 @@ def training(config):
                 print(f"[Warning] Failed to save deltas: {e}")
                 delta_norm = None
 
-        if iteration==1 or iteration % 500 == 0:
+        if  iteration%5 == 1 and iteration<10 or iteration % 500 == 0:
+           
             # or iteration>=model.deformer.non_rigid.delay and iteration<=model.deformer.non_rigid.delay+2000:
             examples = []
             image = torch.clamp(render_pkg["render"], 0.0, 1.0)
@@ -270,6 +276,16 @@ def training(config):
 
             wandb_img = swanlab.Image(tensor_to_numpy_image(image_ROI), caption="ROI_{}".format(data.image_name), size=224)
             examples.append(wandb_img)
+
+           
+            import cv2
+            
+            cv2.imwrite('/mnt/sda1/lxy/ARGS_Wild_results/debug/full_image_{}.png'.format(iteration),
+                        cv2.cvtColor(np.uint8(full_image.permute(1, 2, 0).detach().cpu().numpy() * 255),
+                                    cv2.COLOR_BGR2RGB))
+            cv2.imwrite('/mnt/sda1/lxy/ARGS_Wild_results/debug/full_gt_image_{}.png'.format(iteration),
+                        cv2.cvtColor(np.uint8(full_gt_image.permute(1, 2, 0).detach().cpu().numpy() * 255),
+                                    cv2.COLOR_BGR2RGB))
 
             #swanlab.log({config['name'] + "_images": examples})
             swanlab.log({"train_images": examples})
@@ -407,21 +423,16 @@ def training(config):
         if lambda_aiap_xyz > 0. or lambda_aiap_cov > 0.:
             loss_aiap_xyz, loss_aiap_cov = full_aiap_loss(scene.gaussians_hand_group[data.subject_id]['right'],
                                                           render_pkg["deformed_gaussian_r"])
-            loss_aiap_xyz_l, loss_aiap_cov_l = full_aiap_loss(scene.gaussians_hand_group[data.subject_id]['left'],
-                                                          render_pkg["deformed_gaussian_l"])
-            # obj_loss_aiap_xyz, obj_loss_aiap_cov = full_aiap_loss(scene.gaussians_obj_group[data.obj_id],
-            #                                                       render_pkg['obj_deformed_gaussian'])
+           
             obj_loss_aiap_xyz, obj_loss_aiap_cov = full_aiap_loss(scene.gaussians_obj_group[data.obj_id],
                                                                   render_pkg['obj_deformed_gaussian'], articulated=True)
         else:
             loss_aiap_xyz = torch.tensor(0.).cuda()
             loss_aiap_cov = torch.tensor(0.).cuda()
-            loss_aiap_xyz_l = torch.tensor(0.).cuda()
-            loss_aiap_cov_l = torch.tensor(0.).cuda()
             obj_loss_aiap_cov = torch.tensor(0.).cuda()
             obj_loss_aiap_xyz = torch.tensor(0.).cuda()
 
-        loss += lambda_aiap_cov * (loss_aiap_cov+loss_aiap_cov_l) + lambda_aiap_xyz * (loss_aiap_xyz+loss_aiap_xyz_l)
+        loss += lambda_aiap_cov * loss_aiap_cov + lambda_aiap_xyz * loss_aiap_xyz
         loss += lambda_aiap_cov * obj_loss_aiap_cov + lambda_aiap_xyz * obj_loss_aiap_xyz
 
         # regularization
@@ -466,18 +477,14 @@ def training(config):
                 progress_bar.close()
 
             # Log and save
-            validation(iteration, testing_iterations, testing_interval, (iteration <= config.rigid_iter), scene, evaluator, (pipe, background))
+            #validation(iteration, testing_iterations, testing_interval, (iteration <= config.rigid_iter), scene, evaluator, (pipe, background))
             
 
             # Densification
             if iteration < opt.densify_until_iter:
 
                 # Keep track of max radii in image-space for pruning
-                gaussians_hand_group[data.subject_id]['left'].max_radii2D[visibility_filter_l] = torch.max(
-                    gaussians_hand_group[data.subject_id]['left'].max_radii2D[visibility_filter_l],
-                    radii_l[visibility_filter_l])
-                gaussians_hand_group[data.subject_id]['left'].add_densification_stats(viewspace_point_tensor_l, visibility_filter_l)
-
+                
                 gaussians_hand_group[data.subject_id]['right'].max_radii2D[visibility_filter_r] = torch.max(
                     gaussians_hand_group[data.subject_id]['right'].max_radii2D[visibility_filter_r],
                     radii_r[visibility_filter_r])
@@ -495,7 +502,7 @@ def training(config):
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
                     for sub_id in gaussians_hand_group:
                         gaussians_hand_group[sub_id]['right'].densify_and_prune(opt, scene, size_threshold)
-                        gaussians_hand_group[sub_id]['left'].densify_and_prune(opt, scene, size_threshold)
+                        
                     for obj_id in gaussians_obj_group:
                         gaussians_obj_group[obj_id].densify_and_prune(opt, scene, size_threshold)
 
@@ -503,7 +510,6 @@ def training(config):
                         dataset.white_background and iteration == opt.densify_from_iter):
                     for sub_id in gaussians_hand_group:
                         gaussians_hand_group[sub_id]['right'].reset_opacity()
-                        gaussians_hand_group[sub_id]['left'].reset_opacity()
                     for obj_id in gaussians_obj_group:
                         gaussians_obj_group[obj_id].reset_opacity()
 
@@ -560,13 +566,13 @@ def validation(iteration, testing_iterations, testing_interval, rigid_delay, sce
 
         if idx % 2 == 0:
             # import cv2
-            # cv2.imwrite('/mnt/sda2/lxy/NonrigidGS_results/debug/full_image_novel.png',
+            # cv2.imwrite('/mnt/sda1/lxy/ARGS_Wild_results//debug/full_image_novel.png',
             #                         cv2.cvtColor(np.uint8(full_image_novel.permute(1, 2, 0).detach().cpu().numpy() * 255),
             #                                      cv2.COLOR_BGR2RGB))
-            # cv2.imwrite('/mnt/sda2/lxy/NonrigidGS_results/debug/full_image.png',
+            # cv2.imwrite('/mnt/sda1/lxy/ARGS_Wild_results/debug/full_image.png',
             #             cv2.cvtColor(np.uint8(full_image.permute(1, 2, 0).detach().cpu().numpy() * 255),
             #                          cv2.COLOR_BGR2RGB))
-            # cv2.imwrite('/mnt/sda2/lxy/NonrigidGS_results/debug/full_gt_image_novel.png',
+            # cv2.imwrite('/mnt/sda1/lxy/ARGS_Wild_results/debug/full_gt_image_novel.png',
             #             cv2.cvtColor(np.uint8(full_gt_image_novel.permute(1, 2, 0).detach().cpu().numpy() * 255),
             #                          cv2.COLOR_BGR2RGB))
             wandb_img = swanlab.Image(tensor_to_numpy_image(full_image),
@@ -648,7 +654,6 @@ def validation(iteration, testing_iterations, testing_interval, rigid_delay, sce
     })
     # wandb.log({'scene/opacity_histogram': wandb.Histogram(scene.gaussians.get_opacity.cpu())})
     swanlab.log({'p_num_r': scene.gaussians_hand_group[list(scene.gaussians_hand_group.keys())[0]]['right'].get_xyz.shape[0]})
-    swanlab.log({'p_num_l': scene.gaussians_hand_group[list(scene.gaussians_hand_group.keys())[0]]['left'].get_xyz.shape[0]})
     swanlab.log(
         {'p_num_obj': scene.gaussians_obj_group[list(scene.gaussians_obj_group.keys())[0]].get_xyz.shape[0]})
     torch.cuda.empty_cache()
@@ -656,20 +661,19 @@ def validation(iteration, testing_iterations, testing_interval, rigid_delay, sce
     scene.train()
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="config_arctic")
+@hydra.main(version_base=None, config_path="configs", config_name="config_wild")
 def main(config):
     # print(OmegaConf.to_yaml(config))
     OmegaConf.set_struct(config, False)  # allow adding new values to config
     # print(config.name)
-    config.exp_dir = config.get('exp_dir') or os.path.join('/mnt/sda1/lxy/ARGS_results/', config.dataset._YCB_CLASSES[0],config.name)
+    config.exp_dir = config.get('exp_dir') or os.path.join('/mnt/sda1/lxy/ARGS_Wild_results/', config.dataset._YCB_CLASSES[0],config.name)
 
     os.makedirs(config.exp_dir, exist_ok=True)
     config.checkpoint_iterations.append(config.opt.iterations)
     os.makedirs(os.path.join(config.exp_dir,'code'), exist_ok=True)
     if not config.wandb_disable:
         try:
-            shutil.copyfile('train_arctic.py', config.exp_dir + '/code/train_arctic.py')
-            shutil.copyfile('cocoify_arctic.py', config.exp_dir + '/code/cocoify_arctic.py')
+            shutil.copyfile('train_wild.py', config.exp_dir + '/code/train_wild.py')
             shutil.copytree('./scene', config.exp_dir + '/code/scene')
             shutil.copytree('./models', config.exp_dir + '/code/models')
             shutil.copytree('./configs', config.exp_dir + '/code/configs')

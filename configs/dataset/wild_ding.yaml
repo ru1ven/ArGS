@@ -1,0 +1,38 @@
+# @package _global_
+
+dataset_name: 'wild_stapler'
+
+
+dataset:
+  name: 'wild'
+  root_dir: "/mnt/sda2/lxy/dataset/hand/wild_articulated/stapler/"
+  refine: False
+  finetune: True
+  backbone: 'CLIP'
+  noise: False
+  anno_name: all
+  train_sample_rate : 1
+  val_sample_rate : 1
+  test_sample_rate : 1
+  predict_sample_rate : 1
+  split_train: '/mnt/sda2/lxy/dataset/hand/wild_articulated/stapler/wild_stapler.npy'
+  split_test: '/mnt/sda2/lxy/dataset/hand/wild_articulated/stapler/wild_stapler.npy'
+  speedup: True
+  ego_image_scale: 0.3
+
+  # until_sam2: 30000
+  # lambda_sam2: 1.
+
+  _SUBJECTS : [
+      's11',
+  ]
+  _YCB_CLASSES: [
+      'stapler',
+  ]
+
+  img_hw:
+    - 480
+    - 640
+
+white_background: false
+data_device: cuda

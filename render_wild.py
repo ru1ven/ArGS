@@ -76,12 +76,11 @@ def training(config):
     for obj_id in dataset._YCB_CLASSES:
         gaussians_obj_group[obj_id] = None
     for subject in dataset._SUBJECTS:
-        gaussians_hand_group[subject] = {'right':None, 'left':None,}
+        gaussians_hand_group[subject] = {'right':None}
 
 
     for sub_id in gaussians_hand_group:
         gaussians_hand_group[sub_id]['right'] = GaussianModel(model.gaussian)
-        gaussians_hand_group[sub_id]['left'] = GaussianModel(model.gaussian)
     for obj_id in gaussians_obj_group:
         gaussians_obj_group[obj_id] = GaussianModel(model.gaussian)
 
@@ -107,7 +106,7 @@ def training(config):
 def validation(iteration, rigid_delay, scene: Scene, renderArgs):
     scene.eval()
     torch.cuda.empty_cache()
-    only_save_img = True
+    only_save_img = False
     
     print("test_samples:",len(scene.test_dataset))
 
@@ -131,11 +130,11 @@ def validation(iteration, rigid_delay, scene: Scene, renderArgs):
             cv2.imwrite(vis_dir+'/gt_{}.png'.format(idx),
                         cv2.cvtColor(np.uint8(full_gt_image.permute(1, 2, 0).detach().cpu().numpy() * 255),
                                      cv2.COLOR_BGR2RGB))
-            cv2.imwrite(vis_dir+'/gt_novel_{}.png'.format(idx),
-                        cv2.cvtColor(np.uint8(full_gt_image_novel.permute(1, 2, 0).detach().cpu().numpy() * 255),
-                                     cv2.COLOR_BGR2RGB))
+            # cv2.imwrite(vis_dir+'/gt_novel_{}.png'.format(idx),
+            #             cv2.cvtColor(np.uint8(full_gt_image_novel.permute(1, 2, 0).detach().cpu().numpy() * 255),
+            #                          cv2.COLOR_BGR2RGB))
             continue
-        #novel_cacmera = None
+        novel_cacmera = None
         render_pkg = render(data, iteration+idx, scene, *renderArgs, compute_loss=True,
                             return_opacity=True, delay=rigid_delay, novel_data=novel_cacmera)
         examples = []
@@ -146,20 +145,20 @@ def validation(iteration, rigid_delay, scene: Scene, renderArgs):
 
         full_image = torch.clamp(render_pkg["full_render"], 0.0, 1.0)
         full_gt_image = torch.clamp(data.full_image.to("cuda"), 0.0, 1.0)
-        full_image_novel = torch.clamp(render_pkg["novel_render"], 0.0, 1.0)
-        full_gt_image_novel = torch.clamp(novel_cacmera.full_image.to("cuda"), 0.0, 1.0)
+        #full_image_novel = torch.clamp(render_pkg["novel_render"], 0.0, 1.0)
+        #full_gt_image_novel = torch.clamp(novel_cacmera.full_image.to("cuda"), 0.0, 1.0)
 
         if idx % 1 == 0:
             
-            cv2.imwrite(vis_dir+'/novel_{}.png'.format(idx),
-                                    cv2.cvtColor(np.uint8(full_image_novel.permute(1, 2, 0).detach().cpu().numpy() * 255),
-                                                 cv2.COLOR_BGR2RGB))
+            # cv2.imwrite(vis_dir+'/novel_{}.png'.format(idx),
+            #                         cv2.cvtColor(np.uint8(full_image_novel.permute(1, 2, 0).detach().cpu().numpy() * 255),
+            #                                      cv2.COLOR_BGR2RGB))
             cv2.imwrite(vis_dir+'/render_{}.png'.format(idx),
                         cv2.cvtColor(np.uint8(full_image.permute(1, 2, 0).detach().cpu().numpy() * 255),
                                      cv2.COLOR_BGR2RGB))
-            cv2.imwrite(vis_dir+'/gt_novel_{}.png'.format(idx),
-                        cv2.cvtColor(np.uint8(full_gt_image_novel.permute(1, 2, 0).detach().cpu().numpy() * 255),
-                                     cv2.COLOR_BGR2RGB))
+            # cv2.imwrite(vis_dir+'/gt_novel_{}.png'.format(idx),
+            #             cv2.cvtColor(np.uint8(full_gt_image_novel.permute(1, 2, 0).detach().cpu().numpy() * 255),
+            #                          cv2.COLOR_BGR2RGB))
             cv2.imwrite(vis_dir+'/gt_{}.png'.format(idx),
                         cv2.cvtColor(np.uint8(full_gt_image.permute(1, 2, 0).detach().cpu().numpy() * 255),
                                      cv2.COLOR_BGR2RGB))
@@ -240,12 +239,12 @@ def validation(iteration, rigid_delay, scene: Scene, renderArgs):
     scene.train()
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="config_arctic")
+@hydra.main(version_base=None, config_path="configs", config_name="config_wild")
 def main(config):
     # print(OmegaConf.to_yaml(config))
     OmegaConf.set_struct(config, False)  # allow adding new values to config
     # print(config.name)
-    config.exp_dir = config.get('exp_dir') or os.path.join('/mnt/sda2/lxy/ARGS_results/', config.dataset._YCB_CLASSES[0],config.name)
+    config.exp_dir = config.get('exp_dir') or os.path.join('/mnt/sda1/lxy/ARGS_Wild_results/', config.dataset._YCB_CLASSES[0],config.name)
     config.dataset.white_background = True
 
 
@@ -254,8 +253,7 @@ def main(config):
     os.makedirs(os.path.join(config.exp_dir,'code'), exist_ok=True)
     if not config.wandb_disable:
         try:
-            shutil.copyfile('train_arctic.py', config.exp_dir + '/code/train_arctic.py')
-            shutil.copyfile('cocoify_arctic.py', config.exp_dir + '/code/cocoify_arctic.py')
+            shutil.copyfile('train_wild.py', config.exp_dir + '/code/train_wild.py')
             shutil.copytree('./scene', config.exp_dir + '/code/scene')
             shutil.copytree('./models', config.exp_dir + '/code/models')
             shutil.copytree('./configs', config.exp_dir + '/code/configs')

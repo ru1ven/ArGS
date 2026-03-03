@@ -48,7 +48,8 @@ class Scene:
             self.gaussians_obj_group[obj_id].create_from_pcd(self.train_dataset.randomPointCloud(obj_id), spatial_lr_scale=self.cameras_extent)
         for sub_id in self.gaussians_hand_group:
             self.gaussians_hand_group[sub_id]['right'].create_from_pcd(self.train_dataset.readPointCloud(sub_id, 'right'), spatial_lr_scale=self.cameras_extent)
-            self.gaussians_hand_group[sub_id]['left'].create_from_pcd(self.train_dataset.readPointCloud(sub_id, 'left'),
+            if 'left' in self.gaussians_hand_group[sub_id].keys():
+                self.gaussians_hand_group[sub_id]['left'].create_from_pcd(self.train_dataset.readPointCloud(sub_id, 'left'),
                                                           spatial_lr_scale=self.cameras_extent)
         self.converter = GaussianConverter(cfg, save_dir, self.metadata, self.metadata_obj, self.gaussians_hand_group.keys(), self.gaussians_obj_group.keys()).cuda()
 
@@ -64,12 +65,14 @@ class Scene:
 
         for sub_id in self.gaussians_hand_group:
             self.gaussians_hand_group[sub_id]['right'].optimizer.step()
-            self.gaussians_hand_group[sub_id]['left'].optimizer.step()
+            if 'left' in self.gaussians_hand_group[sub_id].keys():
+                self.gaussians_hand_group[sub_id]['left'].optimizer.step()
         for obj_id in self.gaussians_obj_group:
             self.gaussians_obj_group[obj_id].optimizer.step()
         for sub_id in self.gaussians_hand_group:
             self.gaussians_hand_group[sub_id]['right'].optimizer.zero_grad(set_to_none=True)
-            self.gaussians_hand_group[sub_id]['left'].optimizer.zero_grad(set_to_none=True)
+            if 'left' in self.gaussians_hand_group[sub_id].keys():
+                self.gaussians_hand_group[sub_id]['left'].optimizer.zero_grad(set_to_none=True)
         for obj_id in self.gaussians_obj_group:
             self.gaussians_obj_group[obj_id].optimizer.zero_grad(set_to_none=True)
         self.converter.optimize(iteration)
@@ -80,7 +83,7 @@ class Scene:
         # if pose_refine:
         #     return self.convert_gaussians_pose_refine(viewpoint_camera, iteration, compute_loss)
         return self.converter(self.gaussians_hand_group[viewpoint_camera.subject_id]['right'],
-                              self.gaussians_hand_group[viewpoint_camera.subject_id]['left'],
+                              self.gaussians_hand_group[viewpoint_camera.subject_id]['left'] if 'left' in self.gaussians_hand_group[viewpoint_camera.subject_id].keys() else None,
                                   self.gaussians_obj_group[viewpoint_camera.obj_id], viewpoint_camera, iteration,
                                   compute_loss, delay, prev_camera=prev_data)
 
@@ -161,15 +164,18 @@ class Scene:
 
     def get_skinning_loss(self, subject_id):
         loss_reg_r = getattr(self.converter,f"deformer_hand_{subject_id}_r").rigid.regularization()
-        loss_reg_l = getattr(self.converter, f"deformer_hand_{subject_id}_l").rigid.regularization()
-        loss_skinning = loss_reg_r.get('loss_skinning', torch.tensor(0.).cuda())+loss_reg_l.get('loss_skinning', torch.tensor(0.).cuda())
+        loss_skinning = loss_reg_r.get('loss_skinning', torch.tensor(0.).cuda())
+        if hasattr(self.converter, f"deformer_hand_{subject_id}_l"):
+            loss_reg_l = getattr(self.converter, f"deformer_hand_{subject_id}_l").rigid.regularization()
+            loss_skinning += loss_reg_l.get('loss_skinning', torch.tensor(0.).cuda())
         return loss_skinning
 
     def save(self, iteration):
         point_cloud_path = os.path.join(self.save_dir, "point_cloud/iteration_{}".format(iteration))
         for sub_id in self.gaussians_hand_group:
             self.gaussians_hand_group[sub_id]['right'].save_ply(os.path.join(point_cloud_path, "point_cloud_hand_{}_r.ply").format(sub_id))
-            self.gaussians_hand_group[sub_id]['left'].save_ply(
+            if 'left' in self.gaussians_hand_group[sub_id].keys():
+                self.gaussians_hand_group[sub_id]['left'].save_ply(
                 os.path.join(point_cloud_path, "point_cloud_hand_{}_l.ply").format(sub_id))
         for obj_id in self.gaussians_obj_group:
             self.gaussians_obj_group[obj_id].save_ply(os.path.join(point_cloud_path, "point_cloud_obj_{}.ply".format(obj_id)))
@@ -181,7 +187,8 @@ class Scene:
 
     def save_checkpoint(self, iteration):
         print("\n[ITER {}] Saving Checkpoint".format(iteration))
-        torch.save(({sub_id+'right': self.gaussians_hand_group[sub_id]['right'].capture() for sub_id in self.gaussians_hand_group},
+        if 'left' in self.gaussians_hand_group[list(self.gaussians_hand_group.keys())[0]].keys():
+            torch.save(({sub_id+'right': self.gaussians_hand_group[sub_id]['right'].capture() for sub_id in self.gaussians_hand_group},
                     {sub_id + 'left': self.gaussians_hand_group[sub_id]['left'].capture() for sub_id in
                      self.gaussians_hand_group},
                     {obj_id: self.gaussians_obj_group[obj_id].capture() for obj_id in self.gaussians_obj_group},
@@ -189,13 +196,24 @@ class Scene:
                     self.converter.optimizer.state_dict(),
                     self.converter.scheduler.state_dict(),
                     iteration), self.save_dir + "/ckpt" + str(iteration) + ".pth")
+        else:
+            torch.save(({sub_id+'right': self.gaussians_hand_group[sub_id]['right'].capture() for sub_id in self.gaussians_hand_group},
+                    {obj_id: self.gaussians_obj_group[obj_id].capture() for obj_id in self.gaussians_obj_group},
+                    self.converter.state_dict(),
+                    self.converter.optimizer.state_dict(),
+                    self.converter.scheduler.state_dict(),
+                    iteration), self.save_dir + "/ckpt" + str(iteration) + ".pth")
+
 
     def load_checkpoint(self, path, strict=True):
-
-        (gaussian_params_r, gaussian_params_l, objgaussian_params, converter_sd, converter_opt_sd, converter_scd_sd, first_iter) = torch.load(path)
+        if 'left' in self.gaussians_hand_group[list(self.gaussians_hand_group.keys())[0]].keys():
+            (gaussian_params_r, gaussian_params_l, objgaussian_params, converter_sd, converter_opt_sd, converter_scd_sd, first_iter) = torch.load(path)
+        else:
+             (gaussian_params_r, objgaussian_params, converter_sd, converter_opt_sd, converter_scd_sd, first_iter) = torch.load(path)
         for sub_id in self.gaussians_hand_group:
             self.gaussians_hand_group[sub_id]['right'].restore(gaussian_params_r[sub_id+'right'], self.cfg.opt)
-            self.gaussians_hand_group[sub_id]['left'].restore(gaussian_params_l[sub_id + 'left'], self.cfg.opt)
+            if 'left' in self.gaussians_hand_group[sub_id].keys():
+                self.gaussians_hand_group[sub_id]['left'].restore(gaussian_params_l[sub_id + 'left'], self.cfg.opt)
         for obj_id in self.gaussians_obj_group:
             self.gaussians_obj_group[obj_id].restore(objgaussian_params[obj_id], self.cfg.opt)
 

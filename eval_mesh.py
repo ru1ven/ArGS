@@ -16,18 +16,37 @@ import shutil
 from scipy.spatial import cKDTree as KDTree
 from utils.solver import icp_rts, icp_ts
 
+# mesh_paths = [
+#     "/mnt/sda2/lxy/ARGS_results/box/arctic_box-vis_ours/vis/",
+#     "/mnt/sda2/lxy/ARGS_results/mixer/arctic_mixer-vis_ours/vis/",
+#     "/mnt/sda2/lxy/ARGS_results/waffleiron/arctic_waffleiron-vis_ours/vis/",
+#     "/mnt/sda2/lxy/ARGS_results/phone/arctic_phone-vis_ours/vis/",
+#     "/mnt/sda2/lxy/ARGS_results/ketchup/arctic_ketchup-vis_ours/vis/",
+#     "/mnt/sda2/lxy/ARGS_results/espressomachine/arctic_espressomachine-vis_ours/vis/",
+#     "/mnt/sda2/lxy/ARGS_results/microwave/arctic_microwave-vis_ours/vis/",
+#     "/mnt/sda2/lxy/ARGS_results/scissors/arctic_scissors-vis_ours/vis/",
+#     "/mnt/sda2/lxy/ARGS_results/laptop/arctic_laptop-vis_ours/vis/",
+#     "/mnt/sda2/lxy/ARGS_results/capsulemachine/arctic_capsulemachine-vis_ours/vis/",
+#     "/mnt/sda2/lxy/ARGS_results/notebook/arctic_notebook-vis_ours/vis/",
+# ]
+
+#tag = '3dgs-avatar'
+tag = 'vis_ours'
+
 mesh_paths = [
-    "/mnt/sda2/lxy/ARGS_results/box/arctic_box-vis_ours/vis/",
-    "/mnt/sda2/lxy/ARGS_results/mixer/arctic_mixer-vis_ours/vis/",
-    "/mnt/sda2/lxy/ARGS_results/waffleiron/arctic_waffleiron-vis_ours/vis/",
-    "/mnt/sda2/lxy/ARGS_results/phone/arctic_phone-vis_ours/vis/",
-    "/mnt/sda2/lxy/ARGS_results/ketchup/arctic_ketchup-vis_ours/vis/",
-    "/mnt/sda2/lxy/ARGS_results/espressomachine/arctic_espressomachine-vis_ours/vis/",
-    "/mnt/sda2/lxy/ARGS_results/microwave/arctic_microwave-vis_ours/vis/",
-    "/mnt/sda2/lxy/ARGS_results/scissors/arctic_scissors-vis_ours/vis/",
-    "/mnt/sda2/lxy/ARGS_results/laptop/arctic_laptop-vis_ours/vis/",
-    "/mnt/sda2/lxy/ARGS_results/capsulemachine/arctic_capsulemachine-vis_ours/vis/",
-    "/mnt/sda2/lxy/ARGS_results/notebook/arctic_notebook-vis_ours/vis/",
+
+    "/mnt/sda2/lxy/ARGS_results/box/arctic_box-{}/vis/".format(tag),
+    "/mnt/sda2/lxy/ARGS_results/mixer/arctic_mixer-{}/vis/".format(tag),
+    "/mnt/sda2/lxy/ARGS_results/waffleiron/arctic_waffleiron-{}/vis/".format(tag),
+    "/mnt/sda2/lxy/ARGS_results/phone/arctic_phone-{}/vis/".format(tag),
+    "/mnt/sda2/lxy/ARGS_results/ketchup/arctic_ketchup-{}/vis/".format(tag),
+    "/mnt/sda2/lxy/ARGS_results/espressomachine/arctic_espressomachine-{}/vis/".format(tag),
+    "/mnt/sda2/lxy/ARGS_results/microwave/arctic_microwave-{}/vis/".format(tag),
+    "/mnt/sda2/lxy/ARGS_results/scissors/arctic_scissors-{}/vis/".format(tag),
+    "/mnt/sda2/lxy/ARGS_results/laptop/arctic_laptop-{}/vis/".format(tag),
+    "/mnt/sda2/lxy/ARGS_results/capsulemachine/arctic_capsulemachine-{}/vis/".format(tag),
+    "/mnt/sda2/lxy/ARGS_results/notebook/arctic_notebook-{}/vis/".format(tag),
+    
 ]
 
 test_splits = [
@@ -89,12 +108,16 @@ def evaluate(mesh_path, obj_gt_path, obj_gt_names):
         gen_points_kd_tree = KDTree(pred_obj_points)
         one_distances, one_vertex_ids = gen_points_kd_tree.query(gt_obj_points)
         gt_to_gen_chamfer = np.mean(np.square(one_distances))
+        gt_to_gen_chamfer_sqrt = np.mean(one_distances)
         # other direction
         gt_points_kd_tree = KDTree(gt_obj_points)
         two_distances, two_vertex_ids = gt_points_kd_tree.query(pred_obj_points)
         gen_to_gt_chamfer = np.mean(np.square(two_distances))
+        gen_to_gt_chamfer_sqrt = np.mean(two_distances)
         chamfer_obj = gt_to_gen_chamfer + gen_to_gt_chamfer
+        chamfer_obj_sqrt = gt_to_gen_chamfer_sqrt + gen_to_gt_chamfer_sqrt
         print(chamfer_obj)
+        print(chamfer_obj_sqrt)
 
         threshold = 0.5 # 5 mm
         precision_1 = np.mean(one_distances < threshold).astype(np.float32)
@@ -141,8 +164,8 @@ def main():
 
         chamfers_obj, fscores_obj_5, fscores_obj_10 = evaluate(mesh_path, obj_gt_path, obj_gt_names)
         #summary_filename = os.path.join(mesh+path, "eval_result_{}.txt".format(test_splits[i]).replace("/","_"))
-
-        summary_filename = os.path.join("/mnt/sda2/lxy/ARGS_results/", "eval_result_{}.txt".format(test_splits[i]).replace("/","_"))
+        os.makedirs(os.path.join("/mnt/sda2/lxy/ARGS_results/mesh_results",tag), exist_ok=True)
+        summary_filename = os.path.join("/mnt/sda2/lxy/ARGS_results/mesh_results",tag, "eval_result_{}.txt".format(test_splits[i]).replace("/","_"))
 
         with open(summary_filename, "w") as f:
             eval_result = [[] for i in range(3)]

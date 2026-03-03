@@ -10,6 +10,7 @@
 #
 
 import json
+import math
 import os
 
 from scene.cameras import QueryCamerasLoader
@@ -120,111 +121,55 @@ def validation(iteration, rigid_delay, scene: Scene, renderArgs):
     psnr_train = 0.0
     ssim_train = 0.0
     lpips_train = 0.0
-
+    obj_radians_gt = []
     for idx, data in tqdm(enumerate(scene.train_dataset)):
-
-        novel_cacmera = scene.test_dataset[idx]
         
-        if only_save_img:
-            full_gt_image = torch.clamp(data.full_image.to("cuda"), 0.0, 1.0)
-            full_gt_image_novel = torch.clamp(novel_cacmera.full_image.to("cuda"), 0.0, 1.0)
-            cv2.imwrite(vis_dir+'/gt_{}.png'.format(idx),
-                        cv2.cvtColor(np.uint8(full_gt_image.permute(1, 2, 0).detach().cpu().numpy() * 255),
-                                     cv2.COLOR_BGR2RGB))
-            cv2.imwrite(vis_dir+'/gt_novel_{}.png'.format(idx),
-                        cv2.cvtColor(np.uint8(full_gt_image_novel.permute(1, 2, 0).detach().cpu().numpy() * 255),
-                                     cv2.COLOR_BGR2RGB))
-            continue
+        novel_cacmera = scene.test_dataset[idx]
+        obj_radian_gt = novel_cacmera.obj_radian
+        print(float(obj_radian_gt))
+        obj_radians_gt.append(float(obj_radian_gt))
+        
+        
         #novel_cacmera = None
         render_pkg = render(data, iteration+idx, scene, *renderArgs, compute_loss=True,
                             return_opacity=True, delay=rigid_delay, novel_data=novel_cacmera)
-        examples = []
-
-        movable_prob = render_pkg["movable_prob"]
-        pivot = render_pkg["pivot"]
-        axis = render_pkg["axis"]
-
-        full_image = torch.clamp(render_pkg["full_render"], 0.0, 1.0)
-        full_gt_image = torch.clamp(data.full_image.to("cuda"), 0.0, 1.0)
-        full_image_novel = torch.clamp(render_pkg["novel_render"], 0.0, 1.0)
-        full_gt_image_novel = torch.clamp(novel_cacmera.full_image.to("cuda"), 0.0, 1.0)
-
-        if idx % 1 == 0:
-            
-            cv2.imwrite(vis_dir+'/novel_{}.png'.format(idx),
-                                    cv2.cvtColor(np.uint8(full_image_novel.permute(1, 2, 0).detach().cpu().numpy() * 255),
-                                                 cv2.COLOR_BGR2RGB))
-            cv2.imwrite(vis_dir+'/render_{}.png'.format(idx),
-                        cv2.cvtColor(np.uint8(full_image.permute(1, 2, 0).detach().cpu().numpy() * 255),
-                                     cv2.COLOR_BGR2RGB))
-            cv2.imwrite(vis_dir+'/gt_novel_{}.png'.format(idx),
-                        cv2.cvtColor(np.uint8(full_gt_image_novel.permute(1, 2, 0).detach().cpu().numpy() * 255),
-                                     cv2.COLOR_BGR2RGB))
-            cv2.imwrite(vis_dir+'/gt_{}.png'.format(idx),
-                        cv2.cvtColor(np.uint8(full_gt_image.permute(1, 2, 0).detach().cpu().numpy() * 255),
-                                     cv2.COLOR_BGR2RGB))
-        
-
-        updated_camera = render_pkg['updated_camera']
        
-        pc_obj = render_pkg['obj_deformed_gaussian']
-        coord_min = torch.min(pc_obj._xyz.detach(), dim=0).values
-        coord_max = torch.max(pc_obj._xyz.detach(), dim=0).values
 
-        # 如果你希望使原点为中心（例如，将点云的中心移到原点），可以通过以下方式计算中心偏移量
-        center = (coord_min + coord_max) / 2
-        # 将点云的坐标移动到原点
-        pc_obj._xyz -= center
-        coord_min -= center
-        coord_max -= center  
-        pc_obj.save_ply(os.path.join(vis_dir, 'point_cloud','iteration_{}'.format(idx),'point_cloud.ply'), save_dynamic=False)
-
-        if iter in []:
-            pc_obj = scene.gaussians_obj_group[list(scene.gaussians_obj_group.keys())[0]]
-            coord_min = torch.min(pc_obj._xyz.detach(), dim=0).values
-            coord_max = torch.max(pc_obj._xyz.detach(), dim=0).values
-
-            # 如果你希望使原点为中心（例如，将点云的中心移到原点），可以通过以下方式计算中心偏移量
-            center = (coord_min + coord_max) / 2
-            # 将点云的坐标移动到原点
-            pc_obj._xyz -= center
-            coord_min -= center
-            coord_max -= center  
-            pc_obj.save_ply(os.path.join(vis_dir, 'canonicalGS','iteration_{}'.format(idx),'point_cloud.ply'))
-
-        if not rigid_delay:
-        
-            save_axis(render_pkg['obj_deformed_gaussian']._xyz.detach().cpu().numpy(), pivot.detach().cpu().numpy(), 
-                    axis.detach().cpu().numpy(), os.path.join(vis_dir,'articulation','iteration_{}'.format(idx)))
-            # render_pkg['pc_articulated'].save_ply(
-            #                 os.path.join(vis_dir, 'articulation','iteration_{}'.format(idx),'point_cloud.ply'))
-            render_pkg['pc_articulated'].save_parted_ply(
-                            os.path.join(vis_dir, 'articulation','iteration_{}'.format(idx)))
+        if idx == len(scene.train_dataset)-1:
+            angle_history = getattr(scene.converter, 'deformer_obj_{}'.format(
+                    list(scene.gaussians_obj_group.keys())[0])).rigid.angle_history
             
-            np.save(os.path.join(vis_dir,'articulation','iteration_{}'.format(idx),"pivot.npy"), pivot.detach().cpu().numpy())
-            np.save(os.path.join(vis_dir,'articulation','iteration_{}'.format(idx),"axis.npy"), axis.detach().cpu().numpy())
+            frames = sorted(angle_history.keys())
+            frame_angles = []
+            aae = []
+            aae_inv = []
+            for f in frames:
+                angle = float(angle_history[f].detach())
+                angle -= float(angle_history[frames[0]].detach())
+                pred_radian = angle
+                frame_angles.append(pred_radian)
+                #print(f,pred_radian-obj_radians_gt[f])
 
+                pred_degree = pred_radian / math.pi * 180  # degree
+                gt_degree = (obj_radians_gt[f]-obj_radians_gt[0]) / math.pi * 180  # degree
 
-
-        # generate camera
-        if idx == 0:
-            
-            print(coord_min)
-            print(coord_max)
-            cams = QueryCamerasLoader(coord_min, coord_max, cam_num=512).get_cam
-            json_cams = []
-            for cam_id, cam in enumerate(cams):
-                camera_entry = camera_to_JSON(cam_id, cam)
+                err_deg = np.abs(pred_degree - gt_degree).tolist()
+                err_deg_inverse =  np.abs(pred_degree + gt_degree)
                 
-                json_cams.append(camera_entry)
-            with open( os.path.join(vis_dir, 'cameras.json'), 'w') as file:
-                json.dump(json_cams, file)
+                aae.append(np.array(err_deg, dtype=np.float32))
+                aae_inv.append(np.array(err_deg_inverse, dtype=np.float32))
+                print(err_deg)
+                    
+            np.save(os.path.join(vis_dir,'articulation',"angle.npy"), np.array(frame_angles))
+            summary_filename = os.path.join(vis_dir,'articulation', "eval_articulated.txt")
 
-            print(updated_camera.K)
-           
+            with open(summary_filename, "w") as f:
+                aae = "AAE : {}\n".format(min(np.mean(aae),np.mean(aae_inv)))
+                print(aae); f.write(aae)
 
-        # save mesh
-        #mesh_path = os.path.join(vis_dir, 'obj_mesh_{}.obj'.format(idx))
+
+
+        
 
     psnr_test /= len(scene.test_dataset)
     ssim_test /= len(scene.test_dataset)
