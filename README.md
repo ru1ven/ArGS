@@ -39,7 +39,7 @@ Refer to [HOGS](https://github.com/ru1ven/HOGS/blob/main/requirements.txt) for C
 
 ## Dataset Preparation
 
-Preprocess the dataset using `cocoify_arctic.py` and `preprocess_arctic.py` to generate the training and testing splits used in the paper.
+Download the [ARCTIC](https://github.com/zc-alexfan/arctic) dataset and preprocess it using `cocoify_arctic.py` and `preprocess_arctic.py` to generate the training and testing splits used in the paper.
 
 
 Generate part-level object segmentation for articulated sequences using [SAM2](https://github.com/facebookresearch/sam2).
