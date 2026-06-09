@@ -44,10 +44,6 @@ def preprocess(data_root, subject, imgnames, data_dict):
     os.makedirs(seg_root, exist_ok=True)
 
 
-    #print(os.path.join(image_root,data['imgnames'][0].replace('./arctic_data/data/images/', 'cropped_images/')))
-
-    #print(data['data_dict']['s01/box_grab_01']['params'].keys())
-
     body_model_r = MANO(model_path='./hand_models/mano/',flat_hand_mean=False).cuda()
     body_model_l = MANO(model_path='/mnt/sda2/lxy/arctic/unpack/body_models/mano/',
                              is_rhand=False,flat_hand_mean=False).cuda()
@@ -94,17 +90,13 @@ def preprocess(data_root, subject, imgnames, data_dict):
         view_idx = int(view_idx)
 
         seq_data = data_dict[f"{sid}/{seq_name}"]
-        #print(seq_data.keys())
         data_params = seq_data["params"]
-        #print(data_params.keys())
         # v3d_r = cam_data["verts.right"][:, view_idx]
         # v3d_l = cam_data["verts.left"][:, view_idx]
         vidx = int(image_idx.split(".")[0]) - ioi_offset[sid]
 
 
         pose_r = data_params["pose_r"][vidx].copy()
-        #print(pose_r.shape)
-        #print(pose_r)
         trans_r = data_params["trans_r"][vidx].copy()
         betas_r = data_params["shape_r"][vidx].copy()
         rot_r = data_params["rot_r"][vidx].copy()
@@ -128,22 +120,7 @@ def preprocess(data_root, subject, imgnames, data_dict):
                                    betas=torch.from_numpy(betas_r).float().reshape(-1, 10).to(device),
                                    transl=torch.from_numpy(trans_r).float().reshape(-1, 3).to(device),
                                    )['v'][0].detach().cpu().numpy()
-        # print(v3d_r[0])
-        # print(trans_r)
-        #
-        # print(v3d_r[0])
-        # print('smplx')
-        # output = smplx_r()
-        # print(list(output.keys()))
-        # v3d_r = smplx_r(global_orient=torch.from_numpy(rot_r).float().reshape(-1, 3),
-        #                      hand_pose=torch.from_numpy(pose_r).float().reshape(-1, 45),
-        #                      betas=torch.from_numpy(betas_r).float().reshape(-1, 10),
-        #                      transl=torch.from_numpy(trans_r).float().reshape(-1, 3),
-        #                      )['vertices'][0].detach().numpy()
-        # print(v3d_r[0])
-        # print(trans_r)
-        # v3d_r_0 = smplx_r()['vertices'][0].detach().numpy()
-        # print(v3d_r_0[0])
+      
         v3d_l = body_model_l(global_orient=torch.from_numpy(rot_l).float().reshape(-1, 3).to(device),
                              hand_pose=torch.from_numpy(pose_l).float().reshape(-1, 45).to(device),
                              betas=torch.from_numpy(betas_l).float().reshape(-1, 10).to(device),
@@ -165,17 +142,6 @@ def preprocess(data_root, subject, imgnames, data_dict):
         angles = data_params["obj_arti"][vidx].copy()
 
         obj_rot, obj_trans = apply_w2c_pose_numpy(obj_rot, obj_trans / 1000, world2cam)
-        #print(angles)
-        # if 'use' not in imgname:
-        #     #continue
-        #     #v3d_o = cam_data["verts.object"][:, view_idx]
-        #     obj_rot, _ = cv2.Rodrigues(obj_rot)
-        #     v3d_o = Mesh(
-        #         filename=f"/mnt/sda2/lxy/dataset/hand/arctic/meta/object_vtemplates/{obj_name}/mesh.obj"
-        #     ).vertices
-        #
-        #     v3d_o = (v3d_o/1000@obj_rot.T) +obj_trans
-        # else:
 
         obj_meta = object_tensors(torch.from_numpy(np.array([angles])).unsqueeze(0).to('cpu'),
                                   torch.from_numpy(obj_rot).unsqueeze(0).to('cpu'),
@@ -203,25 +169,11 @@ def preprocess(data_root, subject, imgnames, data_dict):
             intrx = np.array(intris_mat[sid][view_idx - 1])
 
         image_size = image_sizes[sid][view_idx]
-        #print(image_size)
-
+       
         # scale and center in the original image space
 
         data_bbox = seq_data["bbox"]
         bbox = data_bbox[vidx, view_idx]  # original bbox
-        #print(bbox)
-
-        dim=min([image_size[0], image_size[1]])
-
-        k_scale = 1000 / dim  # resized_dim / bbox_size in full image space
-        # intrx[0, 0] *= k_scale  # k*fx
-        # intrx[1, 1] *= k_scale  # k*fy
-        # # intrx[0, 2] = image_size[0]/2 - (bbox[0] - dim / 2.0)
-        # # intrx[1, 2] = image_size[1]/2 - (bbox[1] - dim / 2.0)
-        # intrx[0, 2] -= (bbox[0] - dim / 2.0)
-        # intrx[1, 2] -=  (bbox[1] - dim / 2.0)
-        # intrx[0, 2] *= k_scale
-        # intrx[1, 2] *= k_scale
 
         cx, cy, scale = bbox
         s = 200.0 * scale
@@ -245,9 +197,6 @@ def preprocess(data_root, subject, imgnames, data_dict):
             [0.0, fy_new, cy_new],
             [0.0, 0.0, 1.0]
         ], dtype=np.float32)
-
-        #exit()
-
 
         # generate_seg
         # 定义颜色映射（主手红/物体蓝/次手绿）
@@ -362,11 +311,7 @@ def generate_segmentation(meshes_list, color_map, rasterizer):
 
     # 生成分割图像（根据深度优先选择可见颜色）[5](@ref)
     face_labels = torch.cat(face_labels)
-    # print(face_labels.shape) # torch.Size([4552])
-    # print(face_idx.shape) # torch.Size([848, 480])
     seg_img = color_tensor[face_labels[face_idx]]
-    # print(seg_img.shape) # ([848, 480, 3])
-    # print(zbuf.shape) # ([848, 480])
     seg_img[zbuf <= 0] = 0  # 无效深度设为黑色背景
     return seg_img.cpu().numpy()  # HWC格式
 
@@ -383,9 +328,6 @@ def main():
 
     data = np.load(os.path.join("/mnt/sda2/lxy/arctic/unpack/arctic_data/data/", "splits", "p1_train.npy"),
                    allow_pickle=True).item()
-
-    # data = np.load(os.path.join(data_root, "arctic_seqs", "splits","R9.npy"),allow_pickle=True).item()
-    # print(data['data_dict'].keys())
 
     for subject in subjects:
         imgnames = [n for n in data['imgnames'] if subject in n]
